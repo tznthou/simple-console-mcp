@@ -7,6 +7,11 @@
   "bin": {
     "simple-console-mcp": "src/index.js"
   },
+  "files": [
+    "src/",
+    "bin/",
+    "README.md"
+  ],
   "scripts": {
     "start": "node src/index.js",
     "chrome": "./bin/start-chrome.sh"
@@ -17,8 +22,18 @@
     "devtools",
     "console",
     "debugging",
-    "puppeteer"
+    "puppeteer",
+    "claude",
+    "ai"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tznthou/simple-console-mcp.git"
+  },
+  "homepage": "https://github.com/tznthou/simple-console-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/tznthou/simple-console-mcp/issues"
+  },
   "author": "tznthou",
   "license": "MIT",
   "dependencies": {
