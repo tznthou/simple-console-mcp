@@ -114,7 +114,13 @@ sequenceDiagram
 
 ### Option 1: npm (Recommended)
 
-Add to your Claude Desktop or Claude Code MCP settings:
+**Claude Code (one-liner):**
+
+```bash
+claude mcp add simple-console -- npx -y simple-console-mcp
+```
+
+**Claude Desktop** or other MCP clients ([Cursor](https://docs.cursor.com/context/model-context-protocol) / [Windsurf](https://docs.windsurf.com/windsurf/mcp) / [Cline](https://docs.cline.bot/mcp-servers/configuring-mcp-servers)):
 
 ```json
 {
@@ -128,6 +134,14 @@ Add to your Claude Desktop or Claude Code MCP settings:
 ```
 
 ### Option 2: GitHub URL
+
+**Claude Code:**
+
+```bash
+claude mcp add simple-console -- npx -y github:tznthou/simple-console-mcp
+```
+
+**Manual config:**
 
 ```json
 {
@@ -146,6 +160,14 @@ Add to your Claude Desktop or Claude Code MCP settings:
 git clone https://github.com/tznthou/simple-console-mcp.git
 cd simple-console-mcp && npm install
 ```
+
+**Claude Code:**
+
+```bash
+claude mcp add simple-console -- node /path/to/simple-console-mcp/src/index.js
+```
+
+**Manual config:**
 
 ```json
 {

@@ -114,7 +114,13 @@ sequenceDiagram
 
 ### 方法一：npm（推薦）
 
-直接在 Claude Desktop 或 Claude Code 的 MCP 設定加入：
+**Claude Code（一行搞定）：**
+
+```bash
+claude mcp add simple-console -- npx -y simple-console-mcp
+```
+
+**Claude Desktop** 或其他 MCP 客戶端（[Cursor](https://docs.cursor.com/context/model-context-protocol) / [Windsurf](https://docs.windsurf.com/windsurf/mcp) / [Cline](https://docs.cline.bot/mcp-servers/configuring-mcp-servers)）：
 
 ```json
 {
@@ -128,6 +134,14 @@ sequenceDiagram
 ```
 
 ### 方法二：GitHub URL
+
+**Claude Code：**
+
+```bash
+claude mcp add simple-console -- npx -y github:tznthou/simple-console-mcp
+```
+
+**手動設定：**
 
 ```json
 {
@@ -146,6 +160,14 @@ sequenceDiagram
 git clone https://github.com/tznthou/simple-console-mcp.git
 cd simple-console-mcp && npm install
 ```
+
+**Claude Code：**
+
+```bash
+claude mcp add simple-console -- node /path/to/simple-console-mcp/src/index.js
+```
+
+**手動設定：**
 
 ```json
 {
