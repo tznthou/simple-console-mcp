@@ -244,6 +244,37 @@ Page title: "Login"
 
 ---
 
+## 運作機制：Pull-based（被動式）
+
+```
+Claude 呼叫 get_console_logs → MCP 回傳累積的 logs → Claude 處理
+         ↑                                              |
+         └──────────── Claude 必須再次呼叫 ──────────────┘
+```
+
+**行為說明**：
+1. 第一次呼叫 `get_console_logs` 時，MCP 開始監聽該 target
+2. Console 事件持續被收集到記憶體（最多 500 條）
+3. **Claude 不會自動收到通知** — 必須再次呼叫 `get_console_logs` 才能看到新 log
+
+> **為什麼是 Pull-based？**
+> MCP 協議是 request-response 模式，不支援主動推送。Server 無法主動通知 Claude「有新錯誤」，Claude 必須主動詢問。
+
+### 實際使用對話範例
+
+```
+你：「幫我 debug 這個頁面」
+Claude：[呼叫 list_targets]
+Claude：[呼叫 get_console_logs]
+Claude：「目前沒有錯誤，頁面看起來正常。」
+
+你：「我點了那個按鈕，頁面壞了」
+Claude：[再次呼叫 get_console_logs]  ← 需要你提示後才會再查
+Claude：「發現新錯誤：TypeError at app.js:42...」
+```
+
+---
+
 ## 技術棧
 
 | 技術 | 用途 |

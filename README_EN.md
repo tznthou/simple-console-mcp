@@ -244,6 +244,37 @@ Use different `targetIndex` values to monitor each target separately.
 
 ---
 
+## How It Works: Pull-based
+
+```
+Claude calls get_console_logs → MCP returns accumulated logs → Claude processes
+         ↑                                                        |
+         └──────────────── Claude must call again ────────────────┘
+```
+
+**Behavior**:
+1. On first `get_console_logs` call, MCP starts monitoring that target
+2. Console events are continuously collected in memory (max 500 entries)
+3. **Claude does NOT receive automatic notifications** — must call `get_console_logs` again to see new logs
+
+> **Why Pull-based?**
+> MCP protocol is request-response based and doesn't support push notifications. The server cannot proactively tell Claude "there's a new error" — Claude must actively ask.
+
+### Real Usage Example
+
+```
+You: "Help me debug this page"
+Claude: [calls list_targets]
+Claude: [calls get_console_logs]
+Claude: "No errors found, the page looks fine."
+
+You: "I clicked that button and the page broke"
+Claude: [calls get_console_logs again]  ← needs your prompt to check again
+Claude: "Found new error: TypeError at app.js:42..."
+```
+
+---
+
 ## Tech Stack
 
 | Technology | Purpose |
