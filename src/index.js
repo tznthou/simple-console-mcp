@@ -28,7 +28,13 @@ function getChromePath() {
 
 async function launchChrome(port) {
   const chromePath = getChromePath();
-  const args = [`--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check'];
+  const userDataDir = `/tmp/chrome-cdp-${port}`;
+  const args = [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--no-default-browser-check'
+  ];
 
   spawn(chromePath, args, {
     detached: true,
@@ -87,7 +93,7 @@ function formatLogs(logs, maxLines, filter) {
 // === MCP Server Setup ===
 const server = new McpServer({
   name: 'simple-console-mcp',
-  version: '1.0.0'
+  version: '1.2.0'
 });
 
 // === Tool 1: list_targets ===
