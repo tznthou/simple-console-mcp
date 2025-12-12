@@ -1,0 +1,29 @@
+{
+  "name": "simple-console-mcp",
+  "version": "1.0.0",
+  "description": "Minimal MCP server for browser console log monitoring - 97% lighter than chrome-devtools-mcp",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "simple-console-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "chrome": "./bin/start-chrome.sh"
+  },
+  "keywords": [
+    "mcp",
+    "chrome",
+    "devtools",
+    "console",
+    "debugging",
+    "puppeteer"
+  ],
+  "author": "tznthou",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "puppeteer-core": "^24.0.0",
+    "zod": "^3.24.0"
+  }
+}
