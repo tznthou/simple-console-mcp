@@ -43,6 +43,8 @@ The core goal of this MCP is to fully embrace the **subtraction principle** — 
 
 I believe this is probably the world's smallest MCP for Console Log monitoring. I'm quite proud of that. This was also my first time building an MCP tool, and through the process I learned how to publish packages to npm for anyone in the world to download. I'm not sure if others will adopt this tool, but at least it's very useful for me.
 
+That said, this MCP might seem a bit pointless to non-Vibe Coders — real engineers already know how to read Console Logs themselves, no AI needed. So this is more of a practice project to gain experience. But hey, taking an idea from zero to publishing on npm is valuable in itself.
+
 ---
 
 ## Architecture
