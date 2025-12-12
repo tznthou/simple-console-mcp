@@ -1,5 +1,7 @@
 # simple-console-mcp
 
+> 極簡 Console MCP - 瀏覽器除錯的最小單位
+>
 > Minimal MCP server for browser console log monitoring - **97% lighter** than chrome-devtools-mcp
 
 ## Why?
@@ -12,32 +14,70 @@
 
 If you just want to see console errors, you don't need 50 tools eating your context.
 
-## Quick Start
+## Installation
 
-### 1. Start Chrome with CDP
+### Option 1: npm (Recommended)
 
-```bash
-# macOS
-./bin/start-chrome.sh
-
-# Or manually:
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+```json
+{
+  "mcpServers": {
+    "simple-console": {
+      "command": "npx",
+      "args": ["-y", "simple-console-mcp"]
+    }
+  }
+}
 ```
 
-### 2. Configure Claude Code / Claude Desktop
+### Option 2: GitHub URL
 
-Add to your MCP settings:
+```json
+{
+  "mcpServers": {
+    "simple-console": {
+      "command": "npx",
+      "args": ["-y", "github:tznthou/simple-console-mcp"]
+    }
+  }
+}
+```
+
+### Option 3: Local Installation
+
+```bash
+git clone https://github.com/tznthou/simple-console-mcp.git
+cd simple-console-mcp && npm install
+```
 
 ```json
 {
   "mcpServers": {
     "simple-console": {
       "command": "node",
-      "args": ["/path/to/day-14-simple-console-mcp/src/index.js"]
+      "args": ["/path/to/simple-console-mcp/src/index.js"]
     }
   }
 }
 ```
+
+## Quick Start
+
+### 1. Start Chrome with CDP
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+
+# Linux
+google-chrome --remote-debugging-port=9222
+
+# Windows
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+```
+
+### 2. Add MCP to your Claude settings
+
+Choose one of the installation options above and add it to your MCP settings.
 
 ### 3. Use It
 
@@ -113,6 +153,16 @@ This MCP supports Chrome extension debugging:
 
 Monitor multiple targets by calling `get_console_logs` with different `targetIndex`.
 
+## Requirements
+
+- Node.js 18+
+- Chrome browser with `--remote-debugging-port` enabled
+
 ## License
 
 MIT
+
+## Author
+
+- GitHub: [@tznthou](https://github.com/tznthou)
+- Part of [muripo 30-day challenge](https://github.com/tznthou) - Day 14
