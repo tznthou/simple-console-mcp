@@ -160,7 +160,7 @@ Monitor multiple targets by calling `get_console_logs` with different `targetInd
 
 ## License
 
-MIT
+Apache-2.0
 
 ## Author
 

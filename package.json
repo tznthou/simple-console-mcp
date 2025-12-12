@@ -1,6 +1,6 @@
 {
   "name": "simple-console-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Minimal MCP server for browser console log monitoring - 97% lighter than chrome-devtools-mcp",
   "type": "module",
   "main": "src/index.js",
@@ -10,7 +10,8 @@
   "files": [
     "src/",
     "bin/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "start": "node src/index.js",
@@ -35,7 +36,7 @@
     "url": "https://github.com/tznthou/simple-console-mcp/issues"
   },
   "author": "tznthou",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "puppeteer-core": "^24.0.0",
