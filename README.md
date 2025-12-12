@@ -47,6 +47,42 @@ chrome-devtools-mcp 很強大，但每次 AI 呼叫工具前都要先理解這 5
 
 ---
 
+## 測試驗證
+
+使用 [Cyber Reality Glitcher](https://github.com/tznthou/cyber-glitch)（Muripo Day 13）作為測試網頁，驗證所有功能正常運作：
+
+```
+$ list_targets
+Available targets:
+[0] page: http://localhost:3000/ (title: "loading...")
+
+$ get_console_logs
+=== Console Logs for http://localhost:3000/ ===
+[00:02:50] WARN: cdn.tailwindcss.com should not be used in production...
+[00:02:51] LOG: %c[CYBER_GLITCHER] Reality has been compromised.
+[00:02:51] LOG: %cHover text to scramble | Click to zap | Shift+Click to lock
+(showing 3 of 3 total logs, filter: all)
+
+$ get_console_logs --filter=warn
+[00:02:50] WARN: cdn.tailwindcss.com should not be used in production...
+(showing 3 of 3 total logs, filter: warn)
+
+$ navigate --url=http://localhost:3000/index.html
+Navigated to: http://localhost:3000/index.html
+Page title: "Cyber Reality Glitcher - Muripo Day 13"
+(Console logs cleared)
+```
+
+| 功能 | 狀態 |
+|------|------|
+| `list_targets` | ✅ 成功列出瀏覽器分頁 |
+| `get_console_logs` | ✅ 成功讀取 Console 輸出 |
+| `navigate` | ✅ 成功導航頁面 |
+| `filter` 參數 | ✅ 成功過濾 log 類型 |
+| 自動啟動 Chrome | ✅ v1.2.0 修復獨立 profile 問題 |
+
+---
+
 ## 系統架構
 
 ```mermaid

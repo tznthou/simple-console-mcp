@@ -47,6 +47,42 @@ That said, this MCP might seem a bit pointless to non-Vibe Coders — real engin
 
 ---
 
+## Test Verification
+
+Tested with [Cyber Reality Glitcher](https://github.com/tznthou/cyber-glitch) (Muripo Day 13) as the test webpage. All features verified working:
+
+```
+$ list_targets
+Available targets:
+[0] page: http://localhost:3000/ (title: "loading...")
+
+$ get_console_logs
+=== Console Logs for http://localhost:3000/ ===
+[00:02:50] WARN: cdn.tailwindcss.com should not be used in production...
+[00:02:51] LOG: %c[CYBER_GLITCHER] Reality has been compromised.
+[00:02:51] LOG: %cHover text to scramble | Click to zap | Shift+Click to lock
+(showing 3 of 3 total logs, filter: all)
+
+$ get_console_logs --filter=warn
+[00:02:50] WARN: cdn.tailwindcss.com should not be used in production...
+(showing 3 of 3 total logs, filter: warn)
+
+$ navigate --url=http://localhost:3000/index.html
+Navigated to: http://localhost:3000/index.html
+Page title: "Cyber Reality Glitcher - Muripo Day 13"
+(Console logs cleared)
+```
+
+| Feature | Status |
+|---------|--------|
+| `list_targets` | ✅ Successfully lists browser tabs |
+| `get_console_logs` | ✅ Successfully reads Console output |
+| `navigate` | ✅ Successfully navigates pages |
+| `filter` param | ✅ Successfully filters log types |
+| Auto-launch Chrome | ✅ v1.2.0 fixed isolated profile issue |
+
+---
+
 ## Architecture
 
 ```mermaid
