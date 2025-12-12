@@ -41,6 +41,8 @@ Just three tools. Good enough.
 
 The core goal of this MCP is to fully embrace the **subtraction principle** — achieve maximum effect with minimum functionality. It's also an application of the **80/20 rule**: if 80% of debugging scenarios only need Console Logs, why load 100% of the tools?
 
+I believe this is probably the world's smallest MCP for Console Log monitoring. I'm quite proud of that. This was also my first time building an MCP tool, and through the process I learned how to publish packages to npm for anyone in the world to download. I'm not sure if others will adopt this tool, but at least it's very useful for me.
+
 ---
 
 ## Architecture
