@@ -335,4 +335,3 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 ## Author
 
 - GitHub: [@tznthou](https://github.com/tznthou)
-- Part of [muripo 30-day challenge](https://github.com/tznthou/muripo-hq) - Day 14

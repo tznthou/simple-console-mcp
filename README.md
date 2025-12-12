@@ -335,4 +335,3 @@ simple-console-mcp/
 ## 作者
 
 - GitHub: [@tznthou](https://github.com/tznthou)
-- 專案屬於 [muripo 30-day challenge](https://github.com/tznthou/muripo-hq) - Day 14
