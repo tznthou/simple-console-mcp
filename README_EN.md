@@ -39,6 +39,8 @@ So I built this "**Minimum Viable MCP**":
 
 Just three tools. Good enough.
 
+The core goal of this MCP is to fully embrace the **subtraction principle** — achieve maximum effect with minimum functionality. It's also an application of the **80/20 rule**: if 80% of debugging scenarios only need Console Logs, why load 100% of the tools?
+
 ---
 
 ## Architecture
