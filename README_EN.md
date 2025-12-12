@@ -160,7 +160,17 @@ cd simple-console-mcp && npm install
 
 ## Starting Chrome CDP
 
-The MCP Server needs to connect to Chrome's DevTools Protocol. Start Chrome with the `--remote-debugging-port` flag:
+### Auto-launch (v1.1.0+)
+
+**No manual setup required!** The MCP automatically detects whether Chrome has CDP enabled:
+- If CDP is already enabled → connects directly
+- If not → **auto-launches** a new Chrome with CDP
+
+Just install the MCP, and tell Claude "help me debug" — it handles everything automatically.
+
+### Manual Start (Fallback)
+
+If auto-launch fails, you can start Chrome manually:
 
 ```bash
 # macOS
@@ -178,6 +188,8 @@ Or use the included convenience script:
 ```bash
 ./bin/start-chrome.sh
 ```
+
+> **Note**: If you already have a "normal" Chrome open (without CDP), the MCP will launch a **new** Chrome window. You'll need to open the webpage you want to debug in that new window.
 
 ---
 

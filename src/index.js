@@ -7,6 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import puppeteer from 'puppeteer-core';
 import { z } from 'zod';
+import { spawn } from 'child_process';
 
 // === Global State ===
 let browser = null;
@@ -14,13 +15,48 @@ const logsCache = new Map(); // targetId -> logs[]
 const pageCache = new Map(); // targetIndex -> page
 
 // === Helper Functions ===
+function getChromePath() {
+  switch (process.platform) {
+    case 'darwin':
+      return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    case 'win32':
+      return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    default:
+      return 'google-chrome';
+  }
+}
+
+async function launchChrome(port) {
+  const chromePath = getChromePath();
+  const args = [`--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check'];
+
+  spawn(chromePath, args, {
+    detached: true,
+    stdio: 'ignore'
+  }).unref();
+
+  // Wait for Chrome to start
+  await new Promise(resolve => setTimeout(resolve, 2000));
+}
+
 async function ensureConnection(port) {
   if (browser && browser.isConnected()) return browser;
+
+  // First attempt: try to connect to existing Chrome
   try {
     browser = await puppeteer.connect({ browserURL: `http://localhost:${port}` });
     return browser;
   } catch (err) {
-    throw new Error(`Cannot connect to Chrome CDP (port ${port}). Start Chrome with:\n/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=${port}`);
+    // No Chrome with CDP found, try to launch one
+  }
+
+  // Second attempt: launch Chrome and retry
+  try {
+    await launchChrome(port);
+    browser = await puppeteer.connect({ browserURL: `http://localhost:${port}` });
+    return browser;
+  } catch (err) {
+    throw new Error(`Cannot connect to Chrome CDP (port ${port}).\nAuto-launch failed. Please start Chrome manually with:\n${getChromePath()} --remote-debugging-port=${port}`);
   }
 }
 

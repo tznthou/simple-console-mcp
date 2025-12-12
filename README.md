@@ -160,7 +160,17 @@ cd simple-console-mcp && npm install
 
 ## 啟動 Chrome CDP
 
-MCP Server 需要連接到 Chrome 的 DevTools Protocol。啟動 Chrome 時加上 `--remote-debugging-port` 參數：
+### 自動啟動（v1.1.0+）
+
+**不需要手動操作！** MCP 會自動偵測 Chrome 是否已開啟 CDP：
+- 如果已開啟 → 直接連接
+- 如果未開啟 → **自動啟動** 一個帶 CDP 的 Chrome
+
+只要安裝好 MCP，對 Claude 說「幫我 debug」就會自動處理。
+
+### 手動啟動（備用）
+
+如果自動啟動失敗，可以手動執行：
 
 ```bash
 # macOS
@@ -178,6 +188,8 @@ google-chrome --remote-debugging-port=9222
 ```bash
 ./bin/start-chrome.sh
 ```
+
+> **注意**：如果你已經開著「普通」的 Chrome（沒有 CDP），MCP 會啟動一個**新的** Chrome 視窗。你需要在那個新視窗裡開啟要 debug 的網頁。
 
 ---
 
