@@ -1,3 +1,27 @@
+# Dependencies
 node_modules/
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
+npm-debug.log*
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code local settings
+.claude/
+
+# Temp files
+*.tmp
+*.temp
+/tmp/
+
+# npm package files (generated during npm pack)
+*.tgz
