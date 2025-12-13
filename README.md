@@ -49,7 +49,7 @@ chrome-devtools-mcp 很強大，但每次 AI 呼叫工具前都要先理解這 5
 
 ## 測試驗證
 
-使用 [Cyber Reality Glitcher]((https://github.com/tznthou/cyber-glitch](https://tznthou.github.io/day-13-cyber-glitch/))（Muripo Day 13）作為測試網頁，驗證所有功能正常運作：
+使用 [Cyber Reality Glitcher](https://github.com/tznthou/cyber-glitch](https://tznthou.github.io/day-13-cyber-glitch/)（Muripo Day 13）作為測試網頁，驗證所有功能正常運作：
 
 ```
 $ list_targets
