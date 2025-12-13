@@ -80,6 +80,8 @@ Page title: "Cyber Reality Glitcher - Muripo Day 13"
 | `navigate` | ✅ Successfully navigates pages |
 | `filter` param | ✅ Successfully filters log types |
 | Auto-launch Chrome | ✅ v1.2.0 fixed isolated profile issue |
+| Security Fixes | ✅ v1.3.0 fixed command injection, race condition, etc. |
+| Index Consistency | ✅ v1.3.1 fixed navigate vs list_targets index mismatch |
 
 ---
 
@@ -368,7 +370,7 @@ Claude: "Found new error: TypeError at app.js:42..."
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server main code (~200 lines)
+│   └── index.js        # MCP Server main code (~340 lines, with security fixes)
 ├── bin/
 │   └── start-chrome.sh # Chrome startup script
 ├── package.json
@@ -395,6 +397,48 @@ simple-console-mcp/
 2. **One Chrome at a time**: If multiple Chrome instances exist, MCP connects to the first one
 3. **Log cache limit**: Each target keeps at most 500 logs, older ones are automatically removed
 4. **Navigation clears logs**: Calling navigate clears the target's log cache
+
+---
+
+## Changelog
+
+### v1.3.1 (2024-12-13)
+
+**Bug Fix**:
+- 🐛 Fixed `navigate` tool's `targetIndex` inconsistency with `list_targets`
+  - **Problem**: `navigate` only filtered `page` types, while `list_targets` included `service_worker` and `background_page`, causing the same page to show different indexes across tools
+  - **Fix**: Unified all tools to use the same target filtering logic, with friendly error messages for non-page targets
+
+### v1.3.0 (2024-12-13)
+
+**Security Fixes** (thanks to Code Review for identifying these issues):
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| Command Injection | 🔴 Critical | Added `validatePort()` to ensure port is integer between 1024-65535 |
+| Path Traversal | 🔴 Critical | Same as above, prevents `../` in `port` parameter |
+| Race Condition | 🔴 Critical | Used Promise lock to prevent parallel connections spawning multiple Chrome instances |
+| Resource Leak | 🔴 Critical | Added `SIGINT/SIGTERM` handlers to cleanup browser connections |
+| targetId Confusion | 🟠 High | Changed to use Puppeteer's internal `_targetId` instead of URL as identifier |
+| pageCache Key Error | 🟠 High | Changed to use `targetId` instead of `targetIndex` as cache key |
+
+**Improvements**:
+- ✨ Enhanced parameter validation: Zod schema now includes `.int().min().max()` constraints
+- ✨ Better error handling: Added server-side `console.error` logging
+- ✨ Standardized timestamps: Changed to ISO 8601 format (`toISOString()`)
+- ✨ Code quality: Extracted magic numbers into named constants
+
+### v1.2.0 (2024-12-12)
+
+- 🔧 Auto-launched Chrome now uses isolated `user-data-dir` to avoid conflicts with existing Chrome profiles
+
+### v1.1.0 (2024-12-11)
+
+- ✨ Added auto-launch Chrome CDP feature
+
+### v1.0.0 (2024-12-10)
+
+- 🎉 Initial release
 
 ---
 
