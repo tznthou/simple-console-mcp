@@ -402,14 +402,14 @@ simple-console-mcp/
 
 ## Changelog
 
-### v1.3.1 (2024-12-13)
+### v1.3.1 (2025-12-13)
 
 **Bug Fix**:
 - 🐛 Fixed `navigate` tool's `targetIndex` inconsistency with `list_targets`
   - **Problem**: `navigate` only filtered `page` types, while `list_targets` included `service_worker` and `background_page`, causing the same page to show different indexes across tools
   - **Fix**: Unified all tools to use the same target filtering logic, with friendly error messages for non-page targets
 
-### v1.3.0 (2024-12-13)
+### v1.3.0 (2025-12-13)
 
 **Security Fixes** (thanks to Code Review for identifying these issues):
 
@@ -428,15 +428,15 @@ simple-console-mcp/
 - ✨ Standardized timestamps: Changed to ISO 8601 format (`toISOString()`)
 - ✨ Code quality: Extracted magic numbers into named constants
 
-### v1.2.0 (2024-12-12)
+### v1.2.0 (2025-12-12)
 
 - 🔧 Auto-launched Chrome now uses isolated `user-data-dir` to avoid conflicts with existing Chrome profiles
 
-### v1.1.0 (2024-12-11)
+### v1.1.0 (2025-12-12)
 
 - ✨ Added auto-launch Chrome CDP feature
 
-### v1.0.0 (2024-12-10)
+### v1.0.0 (2025-12-12)
 
 - 🎉 Initial release
 
