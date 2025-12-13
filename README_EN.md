@@ -49,7 +49,7 @@ That said, this MCP might seem a bit pointless to non-Vibe Coders — real engin
 
 ## Test Verification
 
-Tested with [Cyber Reality Glitcher](https://github.com/tznthou/cyber-glitch) (Muripo Day 13) as the test webpage. All features verified working:
+Tested with [Cyber Reality Glitcher](https://tznthou.github.io/day-13-cyber-glitch/) (Muripo Day 13) as the test webpage. All features verified working:
 
 ```
 $ list_targets
