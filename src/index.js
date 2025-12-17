@@ -8,6 +8,12 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import puppeteer from 'puppeteer-core';
 import { z } from 'zod';
 import { spawn } from 'child_process';
+import { createRequire } from 'module';
+import { existsSync } from 'fs';
+
+// 從 package.json 讀取版本號，確保版本一致
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 // === Constants ===
 const CHROME_STARTUP_DELAY_MS = 2000;
@@ -15,6 +21,8 @@ const MAX_LOGS_PER_TARGET = 500;
 const DEFAULT_MAX_LINES = 50;
 const DEFAULT_CDP_PORT = 9222;
 const ALLOWED_TARGET_TYPES = new Set(['page', 'service_worker', 'background_page']);
+const PAGE_LOAD_WAIT_UNTIL = 'domcontentloaded';  // 頁面載入等待策略
+const MAX_URL_LENGTH = 2048;  // URL 長度限制，防止 DoS
 
 // === Global State ===
 let browser = null;
@@ -28,8 +36,17 @@ const pageCache = new Map();   // targetId (Puppeteer internal ID) -> page
  * @returns {string} 穩定的 target ID
  */
 function getTargetId(target) {
-  // 使用 Puppeteer 內部 ID，不會隨導航改變
-  return target._targetId || target.url();
+  // 優先使用官方 API（Puppeteer 20+），fallback 到內部屬性
+  // 這樣即使 Puppeteer 移除 _targetId，只要有官方 API 就能正常運作
+  if (typeof target.targetId === 'function') {
+    return target.targetId();
+  }
+  // Fallback: 使用內部屬性（較舊版本）
+  if (target._targetId) {
+    return target._targetId;
+  }
+  // 最後手段：使用 URL（但會隨導航改變，不推薦）
+  return target.url();
 }
 
 // === Helper Functions ===
@@ -48,6 +65,43 @@ function validatePort(port) {
   return portNum;
 }
 
+/**
+ * 驗證 URL 參數，防止 javascript: 和 file:// 協議注入
+ * @param {string} url - 使用者傳入的 URL
+ * @returns {{url: string, isHttp: boolean}} 驗證後的 URL 和是否為 HTTP
+ * @throws {Error} 如果 URL 協議不合法或長度超限
+ */
+function validateUrl(url) {
+  // 允許 "reload" 特殊指令
+  if (url.toLowerCase() === 'reload') {
+    return { url, isHttp: false };
+  }
+
+  // 檢查 URL 長度，防止 DoS
+  if (url.length > MAX_URL_LENGTH) {
+    throw new Error(`URL too long. Maximum ${MAX_URL_LENGTH} characters allowed.`);
+  }
+
+  // 只允許 http:// 和 https:// 協議
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(`Invalid URL protocol. Only http:// and https:// are allowed. Got: ${url.substring(0, 50)}`);
+  }
+
+  // 檢查是否為非 localhost 的 HTTP（用於警告）
+  const isHttp = /^http:\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1|::1)(:|\/|$)/i.test(url);
+
+  return { url, isHttp };
+}
+
+/**
+ * 建立統一的錯誤回應格式
+ * @param {string} message - 錯誤訊息
+ * @returns {Object} MCP 錯誤回應物件
+ */
+function createErrorResponse(message) {
+  return { content: [{ type: 'text', text: `Error: ${message}` }] };
+}
+
 function getChromePath() {
   switch (process.platform) {
     case 'darwin':
@@ -62,6 +116,13 @@ function getChromePath() {
 async function launchChrome(port) {
   // port 已在 ensureConnection 驗證過，這裡直接使用
   const chromePath = getChromePath();
+
+  // 在 macOS 和 Windows 上檢查 Chrome 執行檔是否存在
+  // Linux 上 'google-chrome' 是命令，由 PATH 解析，無法用 existsSync 檢查
+  if (process.platform !== 'linux' && !existsSync(chromePath)) {
+    throw new Error(`Chrome executable not found at: ${chromePath}\nPlease install Google Chrome or check the installation path.`);
+  }
+
   const userDataDir = `/tmp/chrome-cdp-${port}`;
   const args = [
     `--remote-debugging-port=${port}`,
@@ -141,13 +202,20 @@ function formatLogs(logs, maxLines, filter) {
     filtered = logs.filter(log => log.type.toLowerCase() === filter);
   }
   const recent = filtered.slice(-maxLines);
-  return recent.map(log => `[${log.time}] ${log.type}: ${log.text}`).join('\n');
+  const text = recent.map(log => `[${log.time}] ${log.type}: ${log.text}`).join('\n');
+
+  return {
+    text,
+    displayedCount: recent.length,
+    filteredCount: filtered.length,
+    totalCount: logs.length
+  };
 }
 
 // === MCP Server Setup ===
 const server = new McpServer({
   name: 'simple-console-mcp',
-  version: '1.3.1'  // 修復 navigate index 不一致問題
+  version  // 自動從 package.json 讀取，永不失同步
 });
 
 // === Tool 1: list_targets ===
@@ -167,7 +235,7 @@ server.registerTool(
 
       const formatted = targets
         .filter(t => ALLOWED_TARGET_TYPES.has(t.type()))
-        .map((t, i) => `[${i}] ${t.type()}: ${t.url()} (title: "${t.page ? 'loading...' : ''}")`)
+        .map((t, i) => `[${i}] ${t.type()}: ${t.url()}`)
         .join('\n');
 
       return {
@@ -177,8 +245,8 @@ server.registerTool(
         }]
       };
     } catch (err) {
-      console.error('[list_targets] Error:', err);
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }] };
+      console.error('[list_targets] Error:', { port, error: err.message });
+      return createErrorResponse(err.message);
     }
   }
 );
@@ -202,7 +270,7 @@ server.registerTool(
       const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
 
       if (targetIndex >= targets.length) {
-        return { content: [{ type: 'text', text: `Error: Target index ${targetIndex} not found. Use list_targets to see available targets.` }] };
+        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
       }
 
       const target = targets[targetIndex];
@@ -214,26 +282,27 @@ server.registerTool(
       if (!page) {
         page = await target.page();
         if (!page) {
-          return { content: [{ type: 'text', text: `Error: Cannot get page for target ${targetIndex}. It might be a non-page target.` }] };
+          return createErrorResponse(`Cannot get page for target ${targetIndex}. It might be a non-page target.`);
         }
         pageCache.set(targetId, page);
         setupLogListener(page, targetId);
       }
 
       const logs = logsCache.get(targetId) || [];
-      const formatted = formatLogs(logs, maxLines, filter);
+      const result = formatLogs(logs, maxLines, filter);
       const header = `=== Console Logs for ${displayUrl} ===\n`;
-      const footer = `\n(showing ${Math.min(logs.length, maxLines)} of ${logs.length} total logs, filter: ${filter})`;
+      const filterInfo = filter === 'all' ? '' : ` ${result.filteredCount} matched,`;
+      const footer = `\n(showing ${result.displayedCount} of${filterInfo} ${result.totalCount} total, filter: ${filter})`;
 
       return {
         content: [{
           type: 'text',
-          text: header + (formatted || 'No logs yet. Interact with the page to generate console output.') + footer
+          text: header + (result.text || 'No logs yet. Interact with the page to generate console output.') + footer
         }]
       };
     } catch (err) {
-      console.error('[get_console_logs] Error:', err);
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }] };
+      console.error('[get_console_logs] Error:', { port, targetIndex, maxLines, filter, error: err.message });
+      return createErrorResponse(err.message);
     }
   }
 );
@@ -252,19 +321,23 @@ server.registerTool(
   },
   async ({ url, targetIndex, port }) => {
     try {
+      // 驗證 URL 協議，防止 javascript: 和 file:// 注入
+      const { url: validUrl, isHttp } = validateUrl(url);
+      const httpWarning = isHttp ? '\n⚠️  Warning: Using HTTP (not HTTPS). Data may be intercepted.' : '';
+
       const b = await ensureConnection(port);
       // 使用與 list_targets 相同的過濾邏輯，確保 index 一致
       const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
 
       if (targetIndex >= targets.length) {
-        return { content: [{ type: 'text', text: `Error: Target index ${targetIndex} not found. Use list_targets to see available targets.` }] };
+        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
       }
 
       const target = targets[targetIndex];
 
       // navigate 只能對 page 類型操作，service_worker/background_page 無法導航
       if (target.type() !== 'page') {
-        return { content: [{ type: 'text', text: `Error: Target [${targetIndex}] is a ${target.type()}, not a page. Only page targets can be navigated.` }] };
+        return createErrorResponse(`Target [${targetIndex}] is a ${target.type()}, not a page. Only page targets can be navigated.`);
       }
       const targetId = getTargetId(target);  // 使用穩定 ID
 
@@ -273,7 +346,7 @@ server.registerTool(
       if (!page) {
         page = await target.page();
         if (!page) {
-          return { content: [{ type: 'text', text: `Error: Cannot get page for target ${targetIndex}.` }] };
+          return createErrorResponse(`Cannot get page for target ${targetIndex}.`);
         }
         pageCache.set(targetId, page);
         setupLogListener(page, targetId);
@@ -282,33 +355,43 @@ server.registerTool(
       // Clear logs for this target on navigation（使用穩定 ID，確保清到正確的 logs）
       logsCache.set(targetId, []);
 
-      if (url.toLowerCase() === 'reload') {
-        await page.reload({ waitUntil: 'domcontentloaded' });
+      if (validUrl.toLowerCase() === 'reload') {
+        await page.reload({ waitUntil: PAGE_LOAD_WAIT_UNTIL });
         const newUrl = page.url();
         return { content: [{ type: 'text', text: `Reloaded: ${newUrl}\n(Console logs cleared)` }] };
       } else {
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.goto(validUrl, { waitUntil: PAGE_LOAD_WAIT_UNTIL });
         const title = await page.title();
-        return { content: [{ type: 'text', text: `Navigated to: ${url}\nPage title: "${title}"\n(Console logs cleared)` }] };
+        return { content: [{ type: 'text', text: `Navigated to: ${validUrl}\nPage title: "${title}"\n(Console logs cleared)${httpWarning}` }] };
       }
     } catch (err) {
-      console.error('[navigate] Error:', err);
-      return { content: [{ type: 'text', text: `Error: ${err.message}` }] };
+      console.error('[navigate] Error:', { port, targetIndex, url, error: err.message });
+      return createErrorResponse(err.message);
     }
   }
 );
 
 // === Cleanup Handler ===
+let isCleaningUp = false;  // 防止重複清理
+
 async function cleanup() {
+  // 防止並發調用（Race Condition 保護）
+  if (isCleaningUp) return;
+  isCleaningUp = true;
+
   console.error('[simple-console-mcp] Shutting down...');
 
-  // 清理 page cache
-  for (const page of pageCache.values()) {
+  // 複製 keys 來迭代，避免在迭代時 Map 被修改（Race Condition 保護）
+  const pageIds = [...pageCache.keys()];
+  for (const id of pageIds) {
     try {
-      // 只移除 listener，不關閉 page（因為是連接到現有 Chrome）
-      page.removeAllListeners('console');
+      const page = pageCache.get(id);
+      if (page) {
+        // 只移除 listener，不關閉 page（因為是連接到現有 Chrome）
+        page.removeAllListeners('console');
+      }
     } catch (err) {
-      // ignore
+      // ignore - page 可能已經關閉
     }
   }
   pageCache.clear();
@@ -317,9 +400,12 @@ async function cleanup() {
   // 斷開 browser 連線（不關閉 Chrome，因為可能是使用者的 Chrome）
   if (browser) {
     try {
-      browser.disconnect();
+      // 檢查是否還在連線狀態再斷開
+      if (browser.isConnected()) {
+        browser.disconnect();
+      }
     } catch (err) {
-      // ignore
+      // ignore - browser 可能已經斷開
     }
     browser = null;
   }
@@ -334,6 +420,19 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   await cleanup();
   process.exit(0);
+});
+
+// 處理未捕獲的異常，確保資源被清理
+process.on('uncaughtException', async (err) => {
+  console.error('[simple-console-mcp] Uncaught exception:', err);
+  await cleanup();
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason) => {
+  console.error('[simple-console-mcp] Unhandled rejection:', reason);
+  await cleanup();
+  process.exit(1);
 });
 
 // === Start Server ===

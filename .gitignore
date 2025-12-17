@@ -25,3 +25,6 @@ npm-debug.log*
 
 # npm package files (generated during npm pack)
 *.tgz
+
+# Code review reports (internal use only)
+CODE_REVIEW_*.md

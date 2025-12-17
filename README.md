@@ -82,6 +82,8 @@ Page title: "Cyber Reality Glitcher - Muripo Day 13"
 | 自動啟動 Chrome | ✅ v1.2.0 修復獨立 profile 問題 |
 | 安全性修復 | ✅ v1.3.0 修復命令注入、Race Condition 等 |
 | Index 一致性 | ✅ v1.3.1 修復 navigate 與 list_targets index 不一致 |
+| URL 協議驗證 | ✅ v1.4.0 防止 javascript:/file:// 注入攻擊 |
+| 版本號同步 | ✅ v1.4.0 從 package.json 自動讀取，永不失同步 |
 
 ---
 
@@ -370,7 +372,7 @@ Claude：「發現新錯誤：TypeError at app.js:42...」
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server 主程式（~340 行，含安全性修復）
+│   └── index.js        # MCP Server 主程式（~440 行，含安全性強化）
 ├── bin/
 │   └── start-chrome.sh # Chrome 啟動腳本
 ├── package.json
@@ -401,6 +403,30 @@ simple-console-mcp/
 ---
 
 ## 更新日誌
+
+### v1.4.0 (2025-12-17)
+
+**安全性強化**（全面 Code Review 後的修復）：
+
+| 問題 | 嚴重性 | 修復方式 |
+|------|--------|----------|
+| URL 協議注入 | 🔴 Critical | 新增 `validateUrl()` 只允許 `http://` 和 `https://`，阻擋 `javascript:` 和 `file://` |
+| Shell 命令注入 | 🔴 Critical | `start-chrome.sh` 加入 port 驗證，必須為 1024-65535 整數 |
+| 清理競態條件 | 🔴 Critical | 新增 `isCleaningUp` flag、複製 keys 迭代、`uncaughtException` handler |
+| 私有 API 依賴 | 🟠 High | `getTargetId()` 優先使用官方 API，fallback 到 `_targetId` |
+| 資源清理不完整 | 🟠 High | 新增 `browser.isConnected()` 檢查再斷開 |
+| 錯誤處理不一致 | 🟠 High | 新增 `createErrorResponse()` 統一錯誤格式 |
+| Magic String | 🟠 High | 新增 `PAGE_LOAD_WAIT_UNTIL` 常數 |
+| HTTP 警告缺失 | 🟡 Medium | 非 localhost 的 HTTP URL 會顯示安全警告 |
+| URL 長度無限 | 🟡 Medium | 新增 `MAX_URL_LENGTH = 2048` 限制，防止 DoS |
+| Chrome 路徑未驗證 | 🔵 Low | macOS/Windows 啟動前檢查 Chrome 是否存在 |
+| Node 版本未聲明 | 🔵 Low | `package.json` 新增 `engines.node >= 18` |
+
+**改善項目**：
+- ✨ 版本號自動同步：從 `package.json` 讀取，永不失同步
+- ✨ `list_targets` 移除無效的 title 顯示（原本 `t.page` 永遠是 undefined）
+- ✨ `get_console_logs` footer 統計修正，正確顯示過濾/總數
+- 📦 程式碼從 ~340 行增加到 ~440 行，全為安全防護代碼
 
 ### v1.3.1 (2025-12-13)
 

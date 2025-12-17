@@ -82,6 +82,8 @@ Page title: "Cyber Reality Glitcher - Muripo Day 13"
 | Auto-launch Chrome | ✅ v1.2.0 fixed isolated profile issue |
 | Security Fixes | ✅ v1.3.0 fixed command injection, race condition, etc. |
 | Index Consistency | ✅ v1.3.1 fixed navigate vs list_targets index mismatch |
+| URL Protocol Validation | ✅ v1.4.0 blocks javascript:/file:// injection attacks |
+| Version Sync | ✅ v1.4.0 auto-reads from package.json, never out of sync |
 
 ---
 
@@ -370,7 +372,7 @@ Claude: "Found new error: TypeError at app.js:42..."
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server main code (~340 lines, with security fixes)
+│   └── index.js        # MCP Server main code (~440 lines, security hardened)
 ├── bin/
 │   └── start-chrome.sh # Chrome startup script
 ├── package.json
@@ -401,6 +403,30 @@ simple-console-mcp/
 ---
 
 ## Changelog
+
+### v1.4.0 (2025-12-17)
+
+**Security Hardening** (comprehensive code review fixes):
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| URL Protocol Injection | 🔴 Critical | Added `validateUrl()` allowing only `http://` and `https://`, blocking `javascript:` and `file://` |
+| Shell Command Injection | 🔴 Critical | `start-chrome.sh` now validates port must be integer 1024-65535 |
+| Cleanup Race Condition | 🔴 Critical | Added `isCleaningUp` flag, copy keys before iteration, `uncaughtException` handler |
+| Private API Dependency | 🟠 High | `getTargetId()` prefers official API, falls back to `_targetId` |
+| Incomplete Resource Cleanup | 🟠 High | Added `browser.isConnected()` check before disconnect |
+| Inconsistent Error Handling | 🟠 High | Added `createErrorResponse()` for unified error format |
+| Magic String | 🟠 High | Added `PAGE_LOAD_WAIT_UNTIL` constant |
+| Missing HTTP Warning | 🟡 Medium | Non-localhost HTTP URLs now show security warning |
+| Unlimited URL Length | 🟡 Medium | Added `MAX_URL_LENGTH = 2048` limit to prevent DoS |
+| Chrome Path Unchecked | 🔵 Low | macOS/Windows check Chrome exists before launch |
+| Node Version Undeclared | 🔵 Low | Added `engines.node >= 18` to `package.json` |
+
+**Improvements**:
+- ✨ Auto-synced version: reads from `package.json`, never out of sync
+- ✨ `list_targets` removed broken title display (`t.page` was always undefined)
+- ✨ `get_console_logs` footer stats fixed, now correctly shows filtered/total counts
+- 📦 Code grew from ~340 to ~440 lines, all security hardening
 
 ### v1.3.1 (2025-12-13)
 

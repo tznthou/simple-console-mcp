@@ -4,6 +4,17 @@
 
 PORT=${1:-9222}
 
+# 驗證 port 必須是 1024-65535 的整數，防止命令注入
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+  echo "Error: Port must be a number. Got: $PORT"
+  exit 1
+fi
+
+if [ "$PORT" -lt 1024 ] || [ "$PORT" -gt 65535 ]; then
+  echo "Error: Port must be between 1024 and 65535. Got: $PORT"
+  exit 1
+fi
+
 echo "Starting Chrome with CDP on port $PORT..."
 
 # macOS
