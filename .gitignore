@@ -28,3 +28,6 @@ npm-debug.log*
 
 # Code review reports (internal use only)
 CODE_REVIEW_*.md
+
+# Test files (local testing only)
+/test/

@@ -1,6 +1,6 @@
 {
   "name": "simple-console-mcp",
-  "version": "1.3.6",
+  "version": "1.4.0",
   "description": "Minimal MCP server for browser console log monitoring - 97% lighter than chrome-devtools-mcp",
   "type": "module",
   "main": "src/index.js",
@@ -11,7 +11,7 @@
     "src/",
     "bin/",
     "README.md",
-    "README_EN.md",
+    "README_ZH.md",
     "LICENSE"
   ],
   "scripts": {

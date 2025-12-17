@@ -171,7 +171,27 @@ async function ensureConnection(port) {
       browser = await puppeteer.connect({ browserURL: `http://localhost:${validPort}` });
       return browser;
     } catch (err) {
-      throw new Error(`Cannot connect to Chrome CDP (port ${validPort}).\nAuto-launch failed. Please start Chrome manually with:\n${getChromePath()} --remote-debugging-port=${validPort}`);
+      // 保留原始錯誤訊息以便調試
+      const originalError = err.message || String(err);
+
+      // 如果是我們自己拋出的明確錯誤，直接傳遞
+      if (originalError.includes('Cannot launch Chrome') || originalError.includes('Chrome executable not found')) {
+        throw err;
+      }
+
+      // 否則提供更友好的錯誤訊息
+      throw new Error(
+        `Cannot connect to Chrome CDP (port ${validPort}).\n\n` +
+        `Most likely cause: A regular Chrome browser is already running.\n` +
+        `When Chrome is already open, new instances merge into the existing one,\n` +
+        `preventing debug mode from starting.\n\n` +
+        `Solution: Close all Chrome windows (Cmd+Q on macOS, or close from Task Manager on Windows),\n` +
+        `then try again. The MCP will automatically launch Chrome in debug mode.\n\n` +
+        `Other possible causes:\n` +
+        `- Another application is using port ${validPort}\n` +
+        `- Firewall or antivirus blocking the connection\n\n` +
+        `Original error: ${originalError}`
+      );
     } finally {
       // 無論成功失敗，都釋放 lock
       connectionPromise = null;
@@ -366,6 +386,99 @@ server.registerTool(
       }
     } catch (err) {
       console.error('[navigate] Error:', { port, targetIndex, url, error: err.message });
+      return createErrorResponse(err.message);
+    }
+  }
+);
+
+// === Tool 4: execute_js ===
+const MAX_CODE_LENGTH = 10000;  // 代碼長度限制
+const MAX_RESULT_LENGTH = 50000;  // 結果大小限制
+const JS_EXECUTION_TIMEOUT = 5000;  // 執行超時（毫秒）
+
+server.registerTool(
+  'execute_js',
+  {
+    title: 'Execute JavaScript',
+    description: 'Execute JavaScript code in the page context. Returns the result of the expression. Useful for clicking buttons, filling forms, or calling page functions.',
+    inputSchema: {
+      code: z.string().min(1).max(MAX_CODE_LENGTH).describe('JavaScript code to execute in page context'),
+      targetIndex: z.number().int().min(0).default(0).describe('Target index from list_targets'),
+      port: z.number().int().min(1024).max(65535).default(DEFAULT_CDP_PORT).describe('Chrome CDP port')
+    }
+  },
+  async ({ code, targetIndex, port }) => {
+    try {
+      const b = await ensureConnection(port);
+      const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
+
+      if (targetIndex >= targets.length) {
+        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
+      }
+
+      const target = targets[targetIndex];
+
+      // execute_js 只能對 page 類型操作
+      if (target.type() !== 'page') {
+        return createErrorResponse(`Target [${targetIndex}] is a ${target.type()}, not a page. Only page targets can execute JavaScript.`);
+      }
+
+      const targetId = getTargetId(target);
+
+      // Get or create page for this target
+      let page = pageCache.get(targetId);
+      if (!page) {
+        page = await target.page();
+        if (!page) {
+          return createErrorResponse(`Cannot get page for target ${targetIndex}.`);
+        }
+        pageCache.set(targetId, page);
+        setupLogListener(page, targetId);
+      }
+
+      // 執行 JavaScript，帶超時保護
+      const result = await Promise.race([
+        page.evaluate((jsCode) => {
+          // 在頁面 context 中執行代碼
+          // 使用 Function 構造器來執行代碼，支援表達式和語句
+          try {
+            const fn = new Function(`return (${jsCode})`);
+            return fn();
+          } catch {
+            // 如果不是表達式，嘗試作為語句執行
+            const fn = new Function(jsCode);
+            return fn();
+          }
+        }, code),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Execution timeout (5s)')), JS_EXECUTION_TIMEOUT)
+        )
+      ]);
+
+      // 序列化結果
+      let resultStr;
+      try {
+        resultStr = JSON.stringify(result, null, 2);
+        if (resultStr === undefined) {
+          resultStr = 'undefined';
+        }
+      } catch {
+        resultStr = String(result);
+      }
+
+      // 結果大小限制
+      if (resultStr.length > MAX_RESULT_LENGTH) {
+        resultStr = resultStr.substring(0, MAX_RESULT_LENGTH) + '\n... [Result truncated]';
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `=== JavaScript Executed ===\nCode: ${code.substring(0, 100)}${code.length > 100 ? '...' : ''}\n\nResult:\n${resultStr}`
+        }]
+      };
+    } catch (err) {
+      console.error('[execute_js] Error:', { port, targetIndex, code: code.substring(0, 50), error: err.message });
       return createErrorResponse(err.message);
     }
   }
