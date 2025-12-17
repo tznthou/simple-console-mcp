@@ -82,8 +82,8 @@ Page title: "Cyber Reality Glitcher - Muripo Day 13"
 | 自動啟動 Chrome | ✅ v1.2.0 修復獨立 profile 問題 |
 | 安全性修復 | ✅ v1.3.0 修復命令注入、Race Condition 等 |
 | Index 一致性 | ✅ v1.3.1 修復 navigate 與 list_targets index 不一致 |
-| URL 協議驗證 | ✅ v1.3.5 防止 javascript:/file:// 注入攻擊 |
-| 版本號同步 | ✅ v1.3.5 從 package.json 自動讀取，永不失同步 |
+| URL 協議驗證 | ✅ v1.3.6 防止 javascript:/file:// 注入攻擊 |
+| 版本號同步 | ✅ v1.3.6 從 package.json 自動讀取，永不失同步 |
 
 ---
 
@@ -404,7 +404,7 @@ simple-console-mcp/
 
 ## 更新日誌
 
-### v1.3.5 (2025-12-17)
+### v1.3.6 (2025-12-17)
 
 **安全性強化**（全面 Code Review 後的修復）：
 

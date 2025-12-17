@@ -82,8 +82,8 @@ Page title: "Cyber Reality Glitcher - Muripo Day 13"
 | Auto-launch Chrome | ✅ v1.2.0 fixed isolated profile issue |
 | Security Fixes | ✅ v1.3.0 fixed command injection, race condition, etc. |
 | Index Consistency | ✅ v1.3.1 fixed navigate vs list_targets index mismatch |
-| URL Protocol Validation | ✅ v1.3.5 blocks javascript:/file:// injection attacks |
-| Version Sync | ✅ v1.3.5 auto-reads from package.json, never out of sync |
+| URL Protocol Validation | ✅ v1.3.6 blocks javascript:/file:// injection attacks |
+| Version Sync | ✅ v1.3.6 auto-reads from package.json, never out of sync |
 
 ---
 
@@ -404,7 +404,7 @@ simple-console-mcp/
 
 ## Changelog
 
-### v1.3.5 (2025-12-17)
+### v1.3.6 (2025-12-17)
 
 **Security Hardening** (comprehensive code review fixes):
 
