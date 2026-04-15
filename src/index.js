@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * simple-console-mcp - Minimal MCP server for browser console log monitoring
- * 97% lighter than chrome-devtools-mcp (3 tools vs 50+)
+ * 80% lighter than chrome-devtools-mcp (6 tools vs 30+)
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { spawn } from 'child_process';
 import { createRequire } from 'module';
 import { existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 // 從 package.json 讀取版本號，確保版本一致
 const require = createRequire(import.meta.url);
@@ -23,12 +25,19 @@ const DEFAULT_CDP_PORT = 9222;
 const ALLOWED_TARGET_TYPES = new Set(['page', 'service_worker', 'background_page']);
 const PAGE_LOAD_WAIT_UNTIL = 'domcontentloaded';  // 頁面載入等待策略
 const MAX_URL_LENGTH = 2048;  // URL 長度限制，防止 DoS
+const MAX_NETWORK_LOGS_PER_TARGET = 200;
+const DEFAULT_MAX_NETWORK_LINES = 50;
+const SCREENSHOT_MAX_WIDTH = 1280;
+const SCREENSHOT_MAX_HEIGHT = 800;
+const SCREENSHOT_MAX_BYTES = 500 * 1024;  // 500KB base64 limit
 
 // === Global State ===
 let browser = null;
 let connectionPromise = null;  // 防止並行連線的 Promise lock
 const logsCache = new Map();   // targetId (Puppeteer internal ID) -> logs[]
 const pageCache = new Map();   // targetId (Puppeteer internal ID) -> page
+const networkCache = new Map();      // targetId -> { requests: Map<id, entry>, order: string[] }
+const requestEntryMap = new WeakMap(); // HTTPRequest -> entry（用於事件間關聯同一請求）
 
 /**
  * 取得 target 的穩定 ID（不會隨 URL 改變）
@@ -123,7 +132,7 @@ async function launchChrome(port) {
     throw new Error(`Chrome executable not found at: ${chromePath}\nPlease install Google Chrome or check the installation path.`);
   }
 
-  const userDataDir = `/tmp/chrome-cdp-${port}`;
+  const userDataDir = join(tmpdir(), `chrome-cdp-${port}`);
   const args = [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -216,6 +225,91 @@ function setupLogListener(page, targetId) {
   });
 }
 
+function setupNetworkListener(page, targetId) {
+  if (networkCache.has(targetId)) return;
+
+  const store = { requests: new Map(), order: [] };
+  networkCache.set(targetId, store);
+
+  page.on('request', (request) => {
+    const entry = {
+      method: request.method(),
+      url: request.url().substring(0, 500),
+      resourceType: request.resourceType(),
+      status: null,
+      contentType: '',
+      size: null,
+      duration: null,
+      error: null,
+      startTime: Date.now(),
+      endTime: null,
+    };
+    const id = `${entry.startTime}-${store.order.length}`;
+    store.requests.set(id, entry);
+    store.order.push(id);
+    requestEntryMap.set(request, entry);
+
+    // Evict oldest entries
+    while (store.order.length > MAX_NETWORK_LOGS_PER_TARGET) {
+      const oldest = store.order.shift();
+      store.requests.delete(oldest);
+    }
+  });
+
+  page.on('requestfinished', (request) => {
+    const entry = requestEntryMap.get(request);
+    const response = request.response();
+    if (entry && response) {
+      entry.status = response.status();
+      entry.contentType = response.headers()['content-type'] || '';
+      entry.endTime = Date.now();
+      entry.duration = entry.endTime - entry.startTime;
+      const contentLength = response.headers()['content-length'];
+      if (contentLength) entry.size = parseInt(contentLength, 10);
+    }
+  });
+
+  page.on('requestfailed', (request) => {
+    const entry = requestEntryMap.get(request);
+    if (entry) {
+      const failure = request.failure();
+      entry.error = failure ? failure.errorText : 'Unknown error';
+      entry.endTime = Date.now();
+      entry.duration = entry.endTime - entry.startTime;
+    }
+  });
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+function formatNetworkLogs(store, maxLines, filter) {
+  let entries = store.order.map(id => store.requests.get(id)).filter(Boolean);
+  const totalCount = entries.length;
+
+  if (filter !== 'all') {
+    if (filter === 'failed') {
+      entries = entries.filter(e => e.error || (e.status && e.status >= 400));
+    } else {
+      entries = entries.filter(e => e.resourceType === filter);
+    }
+  }
+  const filteredCount = entries.length;
+  const recent = entries.slice(-maxLines);
+
+  const text = recent.map(e => {
+    const status = e.error ? 'FAILED' : (e.status || 'PENDING');
+    const duration = e.duration !== null ? `${e.duration}ms` : '...';
+    const size = e.size ? formatBytes(e.size) : '';
+    return `[${e.method}] ${status} ${e.url} (${duration}${size ? ', ' + size : ''})${e.error ? ' Error: ' + e.error : ''}`;
+  }).join('\n');
+
+  return { text, displayedCount: recent.length, filteredCount, totalCount };
+}
+
 function formatLogs(logs, maxLines, filter) {
   let filtered = logs;
   if (filter !== 'all') {
@@ -230,6 +324,45 @@ function formatLogs(logs, maxLines, filter) {
     filteredCount: filtered.length,
     totalCount: logs.length
   };
+}
+
+/**
+ * 共用的 target page 取得邏輯
+ * @param {number} targetIndex - target 索引
+ * @param {number} port - CDP port
+ * @param {Object} options
+ * @param {boolean} options.pageOnly - 是否限定只能操作 page 類型
+ * @returns {Promise<{page, targetId, displayUrl} | {error: string}>}
+ */
+async function getTargetPage(targetIndex, port, { pageOnly = false } = {}) {
+  const b = await ensureConnection(port);
+  const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
+
+  if (targetIndex >= targets.length) {
+    return { error: `Target index ${targetIndex} not found. Use list_targets to see available targets.` };
+  }
+
+  const target = targets[targetIndex];
+
+  if (pageOnly && target.type() !== 'page') {
+    return { error: `Target [${targetIndex}] is a ${target.type()}, not a page. This operation requires a page target.` };
+  }
+
+  const targetId = getTargetId(target);
+  const displayUrl = target.url();
+
+  let page = pageCache.get(targetId);
+  if (!page) {
+    page = await target.page();
+    if (!page) {
+      return { error: `Cannot get page for target ${targetIndex}. It might be a non-page target.` };
+    }
+    pageCache.set(targetId, page);
+    setupLogListener(page, targetId);
+    setupNetworkListener(page, targetId);
+  }
+
+  return { page, targetId, displayUrl };
 }
 
 // === MCP Server Setup ===
@@ -286,38 +419,20 @@ server.registerTool(
   },
   async ({ targetIndex, maxLines, filter, port }) => {
     try {
-      const b = await ensureConnection(port);
-      const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
-
-      if (targetIndex >= targets.length) {
-        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
-      }
-
-      const target = targets[targetIndex];
-      const targetId = getTargetId(target);  // 使用穩定 ID，不會隨導航改變
-      const displayUrl = target.url();       // URL 只用於顯示
-
-      // Get or create page for this target（使用 targetId 而非 index）
-      let page = pageCache.get(targetId);
-      if (!page) {
-        page = await target.page();
-        if (!page) {
-          return createErrorResponse(`Cannot get page for target ${targetIndex}. It might be a non-page target.`);
-        }
-        pageCache.set(targetId, page);
-        setupLogListener(page, targetId);
-      }
+      const result = await getTargetPage(targetIndex, port);
+      if (result.error) return createErrorResponse(result.error);
+      const { targetId, displayUrl } = result;
 
       const logs = logsCache.get(targetId) || [];
-      const result = formatLogs(logs, maxLines, filter);
+      const formatted = formatLogs(logs, maxLines, filter);
       const header = `=== Console Logs for ${displayUrl} ===\n`;
-      const filterInfo = filter === 'all' ? '' : ` ${result.filteredCount} matched,`;
-      const footer = `\n(showing ${result.displayedCount} of${filterInfo} ${result.totalCount} total, filter: ${filter})`;
+      const filterInfo = filter === 'all' ? '' : ` ${formatted.filteredCount} matched,`;
+      const footer = `\n(showing ${formatted.displayedCount} of${filterInfo} ${formatted.totalCount} total, filter: ${filter})`;
 
       return {
         content: [{
           type: 'text',
-          text: header + (result.text || 'No logs yet. Interact with the page to generate console output.') + footer
+          text: header + (formatted.text || 'No logs yet. Interact with the page to generate console output.') + footer
         }]
       };
     } catch (err) {
@@ -345,35 +460,18 @@ server.registerTool(
       const { url: validUrl, isHttp } = validateUrl(url);
       const httpWarning = isHttp ? '\n⚠️  Warning: Using HTTP (not HTTPS). Data may be intercepted.' : '';
 
-      const b = await ensureConnection(port);
-      // 使用與 list_targets 相同的過濾邏輯，確保 index 一致
-      const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
+      const result = await getTargetPage(targetIndex, port, { pageOnly: true });
+      if (result.error) return createErrorResponse(result.error);
+      const { page, targetId } = result;
 
-      if (targetIndex >= targets.length) {
-        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
-      }
-
-      const target = targets[targetIndex];
-
-      // navigate 只能對 page 類型操作，service_worker/background_page 無法導航
-      if (target.type() !== 'page') {
-        return createErrorResponse(`Target [${targetIndex}] is a ${target.type()}, not a page. Only page targets can be navigated.`);
-      }
-      const targetId = getTargetId(target);  // 使用穩定 ID
-
-      // Get or create page for this target（使用 targetId 而非 index）
-      let page = pageCache.get(targetId);
-      if (!page) {
-        page = await target.page();
-        if (!page) {
-          return createErrorResponse(`Cannot get page for target ${targetIndex}.`);
-        }
-        pageCache.set(targetId, page);
-        setupLogListener(page, targetId);
-      }
-
-      // Clear logs for this target on navigation（使用穩定 ID，確保清到正確的 logs）
+      // Clear logs and network cache for this target on navigation
+      // 注意：networkCache 必須清空現有 store 而非替換，因為 listener 閉包持有原 store 引用
       logsCache.set(targetId, []);
+      const netStore = networkCache.get(targetId);
+      if (netStore) {
+        netStore.requests.clear();
+        netStore.order.length = 0;
+      }
 
       if (validUrl.toLowerCase() === 'reload') {
         await page.reload({ waitUntil: PAGE_LOAD_WAIT_UNTIL });
@@ -409,32 +507,9 @@ server.registerTool(
   },
   async ({ code, targetIndex, port }) => {
     try {
-      const b = await ensureConnection(port);
-      const targets = b.targets().filter(t => ALLOWED_TARGET_TYPES.has(t.type()));
-
-      if (targetIndex >= targets.length) {
-        return createErrorResponse(`Target index ${targetIndex} not found. Use list_targets to see available targets.`);
-      }
-
-      const target = targets[targetIndex];
-
-      // execute_js 只能對 page 類型操作
-      if (target.type() !== 'page') {
-        return createErrorResponse(`Target [${targetIndex}] is a ${target.type()}, not a page. Only page targets can execute JavaScript.`);
-      }
-
-      const targetId = getTargetId(target);
-
-      // Get or create page for this target
-      let page = pageCache.get(targetId);
-      if (!page) {
-        page = await target.page();
-        if (!page) {
-          return createErrorResponse(`Cannot get page for target ${targetIndex}.`);
-        }
-        pageCache.set(targetId, page);
-        setupLogListener(page, targetId);
-      }
+      const pageResult = await getTargetPage(targetIndex, port, { pageOnly: true });
+      if (pageResult.error) return createErrorResponse(pageResult.error);
+      const { page } = pageResult;
 
       // 執行 JavaScript，帶超時保護
       const result = await Promise.race([
@@ -484,6 +559,124 @@ server.registerTool(
   }
 );
 
+// === Tool 5: get_network_logs ===
+server.registerTool(
+  'get_network_logs',
+  {
+    title: 'Get Network Logs',
+    description: 'Get network request/response logs from a browser target. Starts monitoring on first call.',
+    inputSchema: {
+      targetIndex: z.number().int().min(0).default(0).describe('Target index from list_targets'),
+      maxLines: z.number().int().min(1).max(MAX_NETWORK_LOGS_PER_TARGET).default(DEFAULT_MAX_NETWORK_LINES).describe('Maximum entries to return'),
+      filter: z.enum(['all', 'failed', 'xhr', 'fetch', 'document', 'stylesheet', 'script', 'image']).default('all').describe('Filter by type: all, failed (errors+4xx/5xx), or resource type'),
+      port: z.number().int().min(1024).max(65535).default(DEFAULT_CDP_PORT).describe('Chrome CDP port')
+    }
+  },
+  async ({ targetIndex, maxLines, filter, port }) => {
+    try {
+      const result = await getTargetPage(targetIndex, port);
+      if (result.error) return createErrorResponse(result.error);
+      const { targetId, displayUrl } = result;
+
+      const store = networkCache.get(targetId) || { requests: new Map(), order: [] };
+      const formatted = formatNetworkLogs(store, maxLines, filter);
+      const header = `=== Network Logs for ${displayUrl} ===\n`;
+      const filterInfo = filter === 'all' ? '' : ` ${formatted.filteredCount} matched,`;
+      const footer = `\n(showing ${formatted.displayedCount} of${filterInfo} ${formatted.totalCount} total, filter: ${filter})`;
+
+      return {
+        content: [{
+          type: 'text',
+          text: header + (formatted.text || 'No network requests yet. Navigate or interact with the page.') + footer
+        }]
+      };
+    } catch (err) {
+      console.error('[get_network_logs] Error:', { port, targetIndex, maxLines, filter, error: err.message });
+      return createErrorResponse(err.message);
+    }
+  }
+);
+
+// === Tool 6: take_screenshot ===
+server.registerTool(
+  'take_screenshot',
+  {
+    title: 'Take Screenshot',
+    description: 'Capture a screenshot of the current page. Returns a PNG image. Use for visual debugging of layout, CSS, or UI state.',
+    inputSchema: {
+      targetIndex: z.number().int().min(0).default(0).describe('Target index from list_targets'),
+      fullPage: z.boolean().default(false).describe('Capture the full scrollable page (true) or just the viewport (false)'),
+      port: z.number().int().min(1024).max(65535).default(DEFAULT_CDP_PORT).describe('Chrome CDP port')
+    }
+  },
+  async ({ targetIndex, fullPage, port }) => {
+    try {
+      const result = await getTargetPage(targetIndex, port, { pageOnly: true });
+      if (result.error) return createErrorResponse(result.error);
+      const { page, displayUrl } = result;
+
+      // 儲存原始 viewport 以便還原
+      const originalViewport = page.viewport();
+      let viewportChanged = false;
+
+      try {
+        // Clamp viewport to prevent oversized screenshots
+        if (!originalViewport || originalViewport.width > SCREENSHOT_MAX_WIDTH || originalViewport.height > SCREENSHOT_MAX_HEIGHT) {
+          await page.setViewport({
+            width: Math.min(originalViewport?.width || SCREENSHOT_MAX_WIDTH, SCREENSHOT_MAX_WIDTH),
+            height: Math.min(originalViewport?.height || SCREENSHOT_MAX_HEIGHT, SCREENSHOT_MAX_HEIGHT),
+            deviceScaleFactor: 1,
+          });
+          viewportChanged = true;
+        }
+
+        // fullPage 時限制最大擷取高度，防止超長頁面 OOM
+        const clipOpts = fullPage ? { captureBeyondViewport: true, clip: undefined } : {};
+        const SCREENSHOT_TIMEOUT = 10000;
+
+        // Try PNG first，帶超時保護
+        let base64 = await Promise.race([
+          page.screenshot({ encoding: 'base64', type: 'png', fullPage, optimizeForSpeed: true, ...clipOpts }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (10s)')), SCREENSHOT_TIMEOUT))
+        ]);
+        let mimeType = 'image/png';
+
+        // If PNG too large, fall back to JPEG
+        if (base64.length > SCREENSHOT_MAX_BYTES) {
+          base64 = await Promise.race([
+            page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 70, fullPage, optimizeForSpeed: true, ...clipOpts }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (10s)')), SCREENSHOT_TIMEOUT))
+          ]);
+          mimeType = 'image/jpeg';
+
+          if (base64.length > SCREENSHOT_MAX_BYTES) {
+            return createErrorResponse(
+              `Screenshot too large (${formatBytes(base64.length)}). ` +
+              `Max: ${formatBytes(SCREENSHOT_MAX_BYTES)}. ` +
+              `Try with fullPage: false, or screenshot a simpler page.`
+            );
+          }
+        }
+
+        return {
+          content: [
+            { type: 'image', data: base64, mimeType },
+            { type: 'text', text: `Screenshot of ${displayUrl} (${mimeType.split('/')[1].toUpperCase()}, ${formatBytes(base64.length)})${fullPage ? ' [full page]' : ''}` }
+          ]
+        };
+      } finally {
+        // 還原原始 viewport，避免影響後續工具操作
+        if (viewportChanged && originalViewport) {
+          await page.setViewport(originalViewport).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('[take_screenshot] Error:', { port, targetIndex, fullPage, error: err.message });
+      return createErrorResponse(err.message);
+    }
+  }
+);
+
 // === Cleanup Handler ===
 let isCleaningUp = false;  // 防止重複清理
 
@@ -502,6 +695,9 @@ async function cleanup() {
       if (page) {
         // 只移除 listener，不關閉 page（因為是連接到現有 Chrome）
         page.removeAllListeners('console');
+        page.removeAllListeners('request');
+        page.removeAllListeners('requestfinished');
+        page.removeAllListeners('requestfailed');
       }
     } catch (err) {
       // ignore - page 可能已經關閉
@@ -509,6 +705,7 @@ async function cleanup() {
   }
   pageCache.clear();
   logsCache.clear();
+  networkCache.clear();
 
   // 斷開 browser 連線（不關閉 Chrome，因為可能是使用者的 Chrome）
   if (browser) {
