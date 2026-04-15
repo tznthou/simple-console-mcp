@@ -30,6 +30,7 @@ const DEFAULT_MAX_NETWORK_LINES = 50;
 const SCREENSHOT_MAX_WIDTH = 1280;
 const SCREENSHOT_MAX_HEIGHT = 800;
 const SCREENSHOT_MAX_BYTES = 500 * 1024;  // 500KB base64 limit
+const SCREENSHOT_TIMEOUT = 10000;  // 截圖超時（毫秒）
 
 // === Global State ===
 let browser = null;
@@ -256,16 +257,20 @@ function setupNetworkListener(page, targetId) {
     }
   });
 
+  function finalizeEntry(entry) {
+    entry.endTime = Date.now();
+    entry.duration = entry.endTime - entry.startTime;
+  }
+
   page.on('requestfinished', (request) => {
     const entry = requestEntryMap.get(request);
     const response = request.response();
     if (entry && response) {
       entry.status = response.status();
       entry.contentType = response.headers()['content-type'] || '';
-      entry.endTime = Date.now();
-      entry.duration = entry.endTime - entry.startTime;
-      const contentLength = response.headers()['content-length'];
-      if (contentLength) entry.size = parseInt(contentLength, 10);
+      finalizeEntry(entry);
+      const contentLength = parseInt(response.headers()['content-length'], 10);
+      if (!Number.isNaN(contentLength)) entry.size = contentLength;
     }
   });
 
@@ -274,8 +279,7 @@ function setupNetworkListener(page, targetId) {
     if (entry) {
       const failure = request.failure();
       entry.error = failure ? failure.errorText : 'Unknown error';
-      entry.endTime = Date.now();
-      entry.duration = entry.endTime - entry.startTime;
+      finalizeEntry(entry);
     }
   });
 }
@@ -630,23 +634,23 @@ server.registerTool(
           viewportChanged = true;
         }
 
-        // fullPage 時限制最大擷取高度，防止超長頁面 OOM
-        const clipOpts = fullPage ? { captureBeyondViewport: true, clip: undefined } : {};
-        const SCREENSHOT_TIMEOUT = 10000;
+        // fullPage 時允許擷取超出 viewport 的內容
+        const clipOpts = fullPage ? { captureBeyondViewport: true } : {};
+
+        function takeScreenshotWithTimeout(opts) {
+          return Promise.race([
+            page.screenshot({ encoding: 'base64', fullPage, optimizeForSpeed: true, ...clipOpts, ...opts }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (10s)')), SCREENSHOT_TIMEOUT))
+          ]);
+        }
 
         // Try PNG first，帶超時保護
-        let base64 = await Promise.race([
-          page.screenshot({ encoding: 'base64', type: 'png', fullPage, optimizeForSpeed: true, ...clipOpts }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (10s)')), SCREENSHOT_TIMEOUT))
-        ]);
+        let base64 = await takeScreenshotWithTimeout({ type: 'png' });
         let mimeType = 'image/png';
 
         // If PNG too large, fall back to JPEG
         if (base64.length > SCREENSHOT_MAX_BYTES) {
-          base64 = await Promise.race([
-            page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 70, fullPage, optimizeForSpeed: true, ...clipOpts }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Screenshot timeout (10s)')), SCREENSHOT_TIMEOUT))
-          ]);
+          base64 = await takeScreenshotWithTimeout({ type: 'jpeg', quality: 70 });
           mimeType = 'image/jpeg';
 
           if (base64.length > SCREENSHOT_MAX_BYTES) {
