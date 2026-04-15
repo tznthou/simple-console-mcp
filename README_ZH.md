@@ -1,4 +1,4 @@
-# simple-console-mcp
+# Simple Console MCP
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![npm](https://img.shields.io/npm/v/simple-console-mcp.svg)](https://www.npmjs.com/package/simple-console-mcp)
@@ -7,7 +7,7 @@
 
 [← 回到 Muripo HQ](https://tznthou.github.io/muripo-hq/)
 
-> 極簡 Console MCP — 瀏覽器除錯的最小單位
+> 6 個工具，85% 的除錯場景。AI 輔助瀏覽器除錯的最佳信噪比。
 
 [English Version](README.md)
 
@@ -15,11 +15,11 @@
 
 ## TL;DR
 
-一個精簡的 MCP Server，專注於瀏覽器除錯核心需求。比 chrome-devtools-mcp 輕 **80%**（6 個工具 vs 30+），讓 AI 助手用最佳信噪比幫你 debug。
+一個精簡的 MCP Server，專注於瀏覽器除錯核心需求。**6 個工具 vs 26+**（chrome-devtools-mcp），讓 AI 助手用最佳信噪比幫你 debug。
 
 | 對比 | chrome-devtools-mcp | simple-console-mcp |
 |------|---------------------|-------------------|
-| 工具數 | 30+ | **6** |
+| 工具數 | 26+ | **6** |
 | Context 消耗 | ~5000 tokens | **~350 tokens** |
 | 功能 | 全功能 | Console + Network + Screenshot + JS |
 
@@ -41,39 +41,6 @@ chrome-devtools-mcp 很強大，但工具越多、AI 的認知負擔越大——
 - `take_screenshot` — 截取頁面畫面
 
 核心目標是**最佳信噪比**——用最少的工具達成最大的除錯能力。每個工具都因為 `execute_js` 無法替代而存在。
-
----
-
-## 測試驗證
-
-所有功能都經過完整的測試套件驗證：
-
-### 測試場景
-
-| 測試 | 描述 | 狀態 |
-|------|------|------|
-| **01-basic-logs** | console.log, warn, error, info, debug | ✅ 通過 |
-| **02-js-errors** | TypeError, ReferenceError, SyntaxError, RangeError | ✅ 通過 |
-| **03-async-errors** | Promise rejection, async/await, setTimeout, fetch 錯誤 | ✅ 通過 |
-| **04-stress-test** | 產生 600 條 log，驗證 500 上限正常運作 | ✅ 通過 |
-| **05-special-chars** | Emoji、中文、日文、JSON 物件、Unicode | ✅ 通過 |
-
-### 功能驗證
-
-| 功能 | 狀態 |
-|------|------|
-| `list_targets` - 列出瀏覽器分頁 | ✅ |
-| `get_console_logs` - 讀取 console 輸出 | ✅ |
-| `get_network_logs` - 監控網路請求 | ✅ |
-| `navigate` - 導航或重新載入頁面 | ✅ |
-| `execute_js` - 在頁面執行 JavaScript | ✅ |
-| `take_screenshot` - 截取頁面畫面 | ✅ |
-| `filter` 參數 - 過濾 log/network 類型 | ✅ |
-| 自動啟動 debug 模式 Chrome | ✅ |
-| 獨立 user-data-dir (`/tmp/chrome-cdp-9222`) | ✅ |
-| 500 條 log 快取上限 | ✅ |
-| `execute_js` 5 秒執行超時 | ✅ |
-| Chrome 衝突時的明確錯誤訊息 | ✅ |
 
 ---
 
@@ -359,13 +326,18 @@ Claude 呼叫 get_console_logs → MCP 回傳累積的 logs → Claude 處理
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server 主程式（~700 行，含安全性強化）
+│   └── index.js          # MCP Server 主程式（~770 行，含安全性強化）
 ├── bin/
-│   └── start-chrome.sh # Chrome 啟動腳本
+│   └── start-chrome.sh   # Chrome 啟動腳本
+├── .github/
+│   └── workflows/
+│       └── release.yml   # Tag → GitHub Release + npm publish
+├── test/                  # ��動測試頁面（HTML）
 ├── package.json
-├── README.md           # 英文說明
-├── README_ZH.md        # 中文說明（本檔案）
-└── LICENSE             # Apache-2.0
+├── README.md              # 英文說明
+├── README_ZH.md           # 中文說明（本檔案）
+├── CHANGELOG.md           # ��整更新日誌
+└── LICENSE                # Apache-2.0
 ```
 
 ---
@@ -409,7 +381,7 @@ simple-console-mcp/
 - 🔧 提取 `getTargetPage()` 共用 helper（減少工具間重複程式碼）
 - 🔧 導航時同時清除 Console 和 Network 快取
 - 🔧 Cleanup handler 新增移除 network event listeners
-- 📦 定位從「97% 更輕」調整為「80% 更輕、最佳信噪比」
+- 📦 定位從「97% 更輕」調整為「6 tools vs 26+、最佳信噪比」
 
 ### v1.4.0 (2025-12-17)
 
@@ -426,45 +398,7 @@ simple-console-mcp/
 - 🔧 移除自動關閉 Chrome 邏輯（用戶需手動關閉普通 Chrome）
 - 📝 改善錯誤訊息，更清楚說明 Chrome 衝突的解決方式
 
-### v1.3.6 (2025-12-17)
-
-**安全性強化**（全面 Code Review 後的修復）：
-
-| 問題 | 嚴重性 | 修復方式 |
-|------|--------|----------|
-| URL 協議注入 | 🔴 Critical | 新增 `validateUrl()` 只允許 `http://` 和 `https://` |
-| Shell 命令注入 | 🔴 Critical | `start-chrome.sh` 加入 port 驗證 |
-| 清理競態條件 | 🔴 Critical | 新增 `isCleaningUp` flag、`uncaughtException` handler |
-| 私有 API 依賴 | 🟠 High | `getTargetId()` 優先使用官方 API |
-| 資源清理不完整 | 🟠 High | 新增 `browser.isConnected()` 檢查 |
-| HTTP 警告缺失 | 🟡 Medium | 非 localhost 的 HTTP URL 會顯示安全警告 |
-| URL 長度無限 | 🟡 Medium | 新增 `MAX_URL_LENGTH = 2048` 限制 |
-
-### v1.3.1 (2025-12-13)
-
-- 🐛 修復 `navigate` 工具的 `targetIndex` 與 `list_targets` 不一致問題
-
-### v1.3.0 (2025-12-13)
-
-**安全性修復：**
-
-| 問題 | 嚴重性 | 修復方式 |
-|------|--------|----------|
-| 命令注入漏洞 | 🔴 Critical | 加入 `validatePort()` |
-| Race Condition | 🔴 Critical | 使用 Promise lock |
-| 資源洩漏 | 🔴 Critical | 加入 `SIGINT/SIGTERM` handler |
-
-### v1.2.0 (2025-12-12)
-
-- 🔧 自動啟動 Chrome 時使用獨立 `user-data-dir`
-
-### v1.1.0 (2025-12-12)
-
-- ✨ 新增自動啟動 Chrome CDP 功能
-
-### v1.0.0 (2025-12-12)
-
-- 🎉 首次發布
+完整更新日誌請見 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * simple-console-mcp - Minimal MCP server for browser console log monitoring
- * 80% lighter than chrome-devtools-mcp (6 tools vs 30+)
+ * Lightweight alternative to chrome-devtools-mcp (6 tools vs 26+)
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

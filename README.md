@@ -1,4 +1,4 @@
-# Simple Console MCP 瀏覽器除錯的最小單位
+# Simple Console MCP
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![npm](https://img.shields.io/npm/v/simple-console-mcp.svg)](https://www.npmjs.com/package/simple-console-mcp)
@@ -7,7 +7,7 @@
 
 [← Back to Muripo HQ](https://tznthou.github.io/muripo-hq/)
 
-> Minimal Console MCP — The smallest unit for browser debugging
+> 6 tools, 85% of debugging scenarios. Best signal-to-noise ratio for AI-assisted browser debugging.
 
 [中文版 (Chinese)](README_ZH.md)
 
@@ -15,11 +15,11 @@
 
 ## TL;DR
 
-A minimal MCP Server focused on browser debugging essentials. **80% lighter** than chrome-devtools-mcp (6 tools vs 30+), giving your AI assistant the best signal-to-noise ratio for debugging.
+A minimal MCP Server focused on browser debugging essentials. **6 tools vs 26+** (chrome-devtools-mcp), giving your AI assistant the best signal-to-noise ratio for debugging.
 
 | Comparison | chrome-devtools-mcp | simple-console-mcp |
 |------------|---------------------|-------------------|
-| Tools | 30+ | **6** |
+| Tools | 26+ | **6** |
 | Context Cost | ~5000 tokens | **~350 tokens** |
 | Focus | Full-featured | Console + Network + Screenshot + JS |
 
@@ -27,7 +27,7 @@ A minimal MCP Server focused on browser debugging essentials. **80% lighter** th
 
 ## Why I Built This
 
-This project started with a simple question: **"I just want to debug my web app. Why do I need 30+ tools?"**
+This project started with a simple question: **"I just want to debug my web app. Why do I need 26+ tools?"**
 
 chrome-devtools-mcp is powerful, but more tools means more cognitive load for the AI — leading to slower responses and wrong tool choices. For everyday debugging, you need a high signal-to-noise ratio, not a Swiss army knife.
 
@@ -41,64 +41,6 @@ So I built this "**Minimum Viable MCP**" with the 6 tools that cover ~85% of deb
 - `take_screenshot` — Capture page screenshot for visual debugging
 
 The core goal is **best signal-to-noise ratio** — maximum debugging power with minimum tool count. Every tool earns its place by covering a capability that `execute_js` cannot replace.
-
----
-
-## Test Verification
-
-All features have been tested with a comprehensive test suite:
-
-### Test Scenarios
-
-| Test | Description | Status |
-|------|-------------|--------|
-| **01-basic-logs** | console.log, warn, error, info, debug | ✅ Pass |
-| **02-js-errors** | TypeError, ReferenceError, SyntaxError, RangeError | ✅ Pass |
-| **03-async-errors** | Promise rejection, async/await, setTimeout, fetch errors | ✅ Pass |
-| **04-stress-test** | 600 logs generated, verifies 500 limit works | ✅ Pass |
-| **05-special-chars** | Emoji, Chinese, Japanese, JSON objects, Unicode | ✅ Pass |
-
-### Feature Verification
-
-| Feature | Status |
-|---------|--------|
-| `list_targets` - List browser tabs | ✅ |
-| `get_console_logs` - Read console output | ✅ |
-| `get_network_logs` - Monitor network requests | ✅ |
-| `navigate` - Navigate or reload page | ✅ |
-| `execute_js` - Execute JavaScript in page | ✅ |
-| `take_screenshot` - Capture page screenshot | ✅ |
-| `filter` parameter - Filter log/network types | ✅ |
-| Auto-launch Chrome with debug mode | ✅ |
-| Isolated user-data-dir (`/tmp/chrome-cdp-9222`) | ✅ |
-| 500 log cache limit | ✅ |
-| 5s execution timeout for `execute_js` | ✅ |
-| Clear error message for Chrome conflicts | ✅ |
-
-### Sample Test Output
-
-```
-$ list_targets
-Available targets:
-[0] page: http://127.0.0.1:5500/test/01-basic-logs.html
-
-$ get_console_logs
-=== Console Logs for http://127.0.0.1:5500/test/01-basic-logs.html ===
-[2025-12-17T15:21:28.054Z] LOG: [Test 01] Page loaded - Basic Logs Test
-[2025-12-17T15:21:28.054Z] LOG: This is a LOG message
-[2025-12-17T15:21:28.054Z] WARN: This is a WARNING message
-[2025-12-17T15:21:28.054Z] ERROR: This is an ERROR message
-[2025-12-17T15:21:28.054Z] INFO: This is an INFO message
-[2025-12-17T15:21:28.054Z] DEBUG: This is a DEBUG message
-(showing 6 of 6 total, filter: all)
-
-$ execute_js --code="document.title"
-=== JavaScript Executed ===
-Code: document.title
-
-Result:
-"Test 01: Basic Console Logs"
-```
 
 ---
 
@@ -384,13 +326,18 @@ Use different `targetIndex` values to monitor each target separately.
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server main code (~700 lines, security hardened)
+│   └── index.js          # MCP Server (~770 lines, security hardened)
 ├── bin/
-│   └── start-chrome.sh # Chrome startup script
+│   └── start-chrome.sh   # Chrome startup helper
+├── .github/
+│   └── workflows/
+│       └── release.yml   # Tag → GitHub Release + npm publish
+├── test/                  # Manual test pages (HTML)
 ├── package.json
-├── README.md           # English docs (this file)
-├── README_ZH.md        # Chinese docs
-└── LICENSE             # Apache-2.0
+├── README.md              # English docs (this file)
+├── README_ZH.md           # Chinese docs
+├── CHANGELOG.md           # Full changelog
+└── LICENSE                # Apache-2.0
 ```
 
 ---
@@ -434,7 +381,7 @@ simple-console-mcp/
 - 🔧 Extracted `getTargetPage()` shared helper (reduces code duplication across tools)
 - 🔧 Navigation now clears both console and network caches
 - 🔧 Cleanup handler now removes network event listeners
-- 📦 Repositioned from "97% lighter" to "80% lighter with best signal-to-noise ratio"
+- 📦 Repositioned from "97% lighter" to "6 tools vs 26+ with best signal-to-noise ratio"
 
 ### v1.4.0 (2025-12-17)
 
@@ -451,45 +398,7 @@ simple-console-mcp/
 - 🔧 Removed automatic Chrome kill logic (user must close regular Chrome manually)
 - 📝 Better error messages explaining Chrome conflict resolution
 
-### v1.3.6 (2025-12-17)
-
-**Security Hardening** (comprehensive code review fixes):
-
-| Issue | Severity | Fix |
-|-------|----------|-----|
-| URL Protocol Injection | 🔴 Critical | Added `validateUrl()` allowing only `http://` and `https://` |
-| Shell Command Injection | 🔴 Critical | `start-chrome.sh` validates port must be integer 1024-65535 |
-| Cleanup Race Condition | 🔴 Critical | Added `isCleaningUp` flag, `uncaughtException` handler |
-| Private API Dependency | 🟠 High | `getTargetId()` prefers official API, falls back to `_targetId` |
-| Incomplete Resource Cleanup | 🟠 High | Added `browser.isConnected()` check before disconnect |
-| Missing HTTP Warning | 🟡 Medium | Non-localhost HTTP URLs now show security warning |
-| Unlimited URL Length | 🟡 Medium | Added `MAX_URL_LENGTH = 2048` limit |
-
-### v1.3.1 (2025-12-13)
-
-- 🐛 Fixed `navigate` tool's `targetIndex` inconsistency with `list_targets`
-
-### v1.3.0 (2025-12-13)
-
-**Security Fixes:**
-
-| Issue | Severity | Fix |
-|-------|----------|-----|
-| Command Injection | 🔴 Critical | Added `validatePort()` |
-| Race Condition | 🔴 Critical | Used Promise lock |
-| Resource Leak | 🔴 Critical | Added `SIGINT/SIGTERM` handlers |
-
-### v1.2.0 (2025-12-12)
-
-- 🔧 Auto-launched Chrome now uses isolated `user-data-dir`
-
-### v1.1.0 (2025-12-12)
-
-- ✨ Added auto-launch Chrome CDP feature
-
-### v1.0.0 (2025-12-12)
-
-- 🎉 Initial release
+Full changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
