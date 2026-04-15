@@ -1,0 +1,82 @@
+# Release — Create GitHub Release + publish to npm
+#
+# Triggered by pushing a version tag (e.g., v1.5.0).
+# 1. Runs smoke tests (syntax check + file existence)
+# 2. Creates a GitHub Release with auto-generated notes
+# 3. Publishes to npm registry with provenance
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Smoke test
+        run: |
+          # Syntax check
+          node --check src/index.js
+
+          # Verify distributable files exist
+          for f in src/index.js bin/start-chrome.sh package.json README.md README_ZH.md LICENSE; do
+            test -f "$f" || { echo "Missing: $f"; exit 1; }
+          done
+
+          # Verify version in package.json matches tag
+          PKG_VERSION="v$(node -p 'require("./package.json").version')"
+          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: package.json=$PKG_VERSION tag=$TAG_VERSION"
+            exit 1
+          fi
+          echo "All checks passed. Version: $TAG_VERSION"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          gh release create "$VERSION" --generate-notes
+
+  npm-publish:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    environment: npm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
