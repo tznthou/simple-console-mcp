@@ -3,6 +3,7 @@
 # Usage: ./bin/start-chrome.sh [port]
 
 PORT=${1:-9222}
+shift 2>/dev/null  # 移除 port 參數，避免 "$@" 重複傳遞
 
 # 驗證 port 必須是 1024-65535 的整數，防止命令注入
 if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then

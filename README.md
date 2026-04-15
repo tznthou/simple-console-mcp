@@ -1,4 +1,4 @@
-# simple-console-mcp
+# Simple Console MCP 瀏覽器除錯的最小單位
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![npm](https://img.shields.io/npm/v/simple-console-mcp.svg)](https://www.npmjs.com/package/simple-console-mcp)
@@ -15,32 +15,32 @@
 
 ## TL;DR
 
-An extremely minimal MCP Server focused on browser Console Log monitoring. **97% lighter** than chrome-devtools-mcp (4 tools vs 50+), so your AI assistant won't consume a ton of context tokens while debugging.
+A minimal MCP Server focused on browser debugging essentials. **80% lighter** than chrome-devtools-mcp (6 tools vs 30+), giving your AI assistant the best signal-to-noise ratio for debugging.
 
 | Comparison | chrome-devtools-mcp | simple-console-mcp |
 |------------|---------------------|-------------------|
-| Tools | 50+ | **4** |
-| Context Cost | ~5000 tokens | **~200 tokens** |
-| Focus | Full-featured | Console + JS execution |
+| Tools | 30+ | **6** |
+| Context Cost | ~5000 tokens | **~350 tokens** |
+| Focus | Full-featured | Console + Network + Screenshot + JS |
 
 ---
 
 ## Why I Built This
 
-This project started with a simple question: **"I just want to see Console Logs. Why do I need 50 tools?"**
+This project started with a simple question: **"I just want to debug my web app. Why do I need 30+ tools?"**
 
-chrome-devtools-mcp is powerful, but every time the AI calls a tool, it needs to understand all 50+ tools first. The tool descriptions alone consume a huge amount of context. For scenarios where you just want to quickly debug JavaScript errors, that's wasteful.
+chrome-devtools-mcp is powerful, but more tools means more cognitive load for the AI — leading to slower responses and wrong tool choices. For everyday debugging, you need a high signal-to-noise ratio, not a Swiss army knife.
 
-So I built this "**Minimum Viable MCP**":
+So I built this "**Minimum Viable MCP**" with the 6 tools that cover ~85% of debugging scenarios:
 
 - `list_targets` — List browser tabs
 - `get_console_logs` — Read Console output
+- `get_network_logs` — Monitor HTTP requests/responses
 - `navigate` — Navigate or reload
 - `execute_js` — Execute JavaScript in page context
+- `take_screenshot` — Capture page screenshot for visual debugging
 
-Just four tools. Good enough.
-
-The core goal of this MCP is to fully embrace the **subtraction principle** — achieve maximum effect with minimum functionality. It's also an application of the **80/20 rule**: if 80% of debugging scenarios only need Console Logs, why load 100% of the tools?
+The core goal is **best signal-to-noise ratio** — maximum debugging power with minimum tool count. Every tool earns its place by covering a capability that `execute_js` cannot replace.
 
 ---
 
@@ -64,9 +64,11 @@ All features have been tested with a comprehensive test suite:
 |---------|--------|
 | `list_targets` - List browser tabs | ✅ |
 | `get_console_logs` - Read console output | ✅ |
+| `get_network_logs` - Monitor network requests | ✅ |
 | `navigate` - Navigate or reload page | ✅ |
 | `execute_js` - Execute JavaScript in page | ✅ |
-| `filter` parameter - Filter log types | ✅ |
+| `take_screenshot` - Capture page screenshot | ✅ |
+| `filter` parameter - Filter log/network types | ✅ |
 | Auto-launch Chrome with debug mode | ✅ |
 | Isolated user-data-dir (`/tmp/chrome-cdp-9222`) | ✅ |
 | 500 log cache limit | ✅ |
@@ -208,6 +210,26 @@ Get Console output from a specific target. Starts monitoring on first call.
 (showing 2 of 50 total logs, filter: all)
 ```
 
+### `get_network_logs` (New in v1.5.0)
+
+Get HTTP request/response logs from a specific target. Starts monitoring on first call.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `targetIndex` | number | 0 | Target index from list_targets |
+| `maxLines` | number | 50 | Maximum entries to return |
+| `filter` | string | "all" | Filter type: all / failed / xhr / fetch / document / stylesheet / script / image |
+| `port` | number | 9222 | Chrome CDP port |
+
+```
+=== Network Logs for http://localhost:3000 ===
+[GET] 200 http://localhost:3000/ (120ms, 4.2KB)
+[GET] 200 http://localhost:3000/api/user (85ms, 1.1KB)
+[POST] 500 http://localhost:3000/api/save (230ms)
+[GET] FAILED http://localhost:3000/missing.js (15ms) Error: net::ERR_FILE_NOT_FOUND
+(showing 4 of 4 total, filter: all)
+```
+
 ### `navigate`
 
 Navigate to a URL or reload the page.
@@ -266,6 +288,21 @@ Result:
 "My Application"
 ```
 
+### `take_screenshot` (New in v1.5.0)
+
+Capture a screenshot of the current page. Returns a PNG image (auto-falls back to JPEG if too large). Useful for visual debugging of layout, CSS, or UI state.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `targetIndex` | number | 0 | Target index from list_targets |
+| `fullPage` | boolean | false | Capture full scrollable page (true) or viewport only (false) |
+| `port` | number | 9222 | Chrome CDP port |
+
+**Safety measures:**
+- Viewport clamped to 1280×800 max
+- PNG → JPEG fallback if image exceeds 500KB
+- `fullPage: false` by default to prevent oversized captures
+
 ---
 
 ## Architecture
@@ -278,8 +315,8 @@ graph TB
 
     subgraph MCP["simple-console-mcp"]
         SERVER["MCP Server<br/>StdioTransport"]
-        TOOLS["4 Tools<br/>list_targets | get_console_logs | navigate | execute_js"]
-        CACHE["Log Cache<br/>Map + WeakMap"]
+        TOOLS["6 Tools<br/>list_targets | get_console_logs | get_network_logs<br/>navigate | execute_js | take_screenshot"]
+        CACHE["Cache<br/>Console Logs + Network Requests"]
     end
 
     subgraph Browser["Chrome Browser"]
@@ -347,7 +384,7 @@ Use different `targetIndex` values to monitor each target separately.
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server main code (~550 lines, security hardened)
+│   └── index.js        # MCP Server main code (~700 lines, security hardened)
 ├── bin/
 │   └── start-chrome.sh # Chrome startup script
 ├── package.json
@@ -372,12 +409,32 @@ simple-console-mcp/
 
 1. **Chrome must have CDP enabled**: Chrome without `--remote-debugging-port` cannot be connected
 2. **One Chrome at a time**: If multiple Chrome instances exist, MCP connects to the first one
-3. **Log cache limit**: Each target keeps at most 500 logs, older ones are automatically removed
-4. **Navigation clears logs**: Calling navigate clears the target's log cache
+3. **Log cache limit**: Each target keeps at most 500 console logs and 200 network entries, older ones are automatically removed
+4. **Navigation clears cache**: Calling navigate clears both console logs and network request cache
 
 ---
 
 ## Changelog
+
+### v1.5.0 (2026-04-15)
+
+**New Features:**
+- ✨ **`get_network_logs` tool**: Monitor HTTP requests/responses
+  - Pull-based monitoring (same pattern as console logs)
+  - Shows method, URL, status, duration, size
+  - Filter by: all / failed / xhr / fetch / document / stylesheet / script / image
+  - 200 entries cache per target
+- ✨ **`take_screenshot` tool**: Capture page screenshots
+  - Returns PNG image via MCP image content type
+  - Auto-fallback to JPEG if PNG exceeds 500KB
+  - Viewport clamped to 1280×800, deviceScaleFactor: 1
+  - Optional `fullPage` mode
+
+**Improvements:**
+- 🔧 Extracted `getTargetPage()` shared helper (reduces code duplication across tools)
+- 🔧 Navigation now clears both console and network caches
+- 🔧 Cleanup handler now removes network event listeners
+- 📦 Repositioned from "97% lighter" to "80% lighter with best signal-to-noise ratio"
 
 ### v1.4.0 (2025-12-17)
 

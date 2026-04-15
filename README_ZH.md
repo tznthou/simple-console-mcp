@@ -15,32 +15,32 @@
 
 ## TL;DR
 
-一個極度精簡的 MCP Server，專注於瀏覽器 Console Log 監聽。比 chrome-devtools-mcp 輕 **97%**（4 個工具 vs 50+），讓 AI 助手幫你 debug 時不會吃掉一堆 context token。
+一個精簡的 MCP Server，專注於瀏覽器除錯核心需求。比 chrome-devtools-mcp 輕 **80%**（6 個工具 vs 30+），讓 AI 助手用最佳信噪比幫你 debug。
 
 | 對比 | chrome-devtools-mcp | simple-console-mcp |
 |------|---------------------|-------------------|
-| 工具數 | 50+ | **4** |
-| Context 消耗 | ~5000 tokens | **~200 tokens** |
-| 功能 | 全功能 | Console + JS 執行 |
+| 工具數 | 30+ | **6** |
+| Context 消耗 | ~5000 tokens | **~350 tokens** |
+| 功能 | 全功能 | Console + Network + Screenshot + JS |
 
 ---
 
 ## 開發心得
 
-這個專案源自一個簡單的問題：**「我只想看 Console Log，為什麼要載入 50 個工具？」**
+這個專案源自一個簡單的問題：**「我只想 debug 我的 web app，為什麼要載入 30 個工具？」**
 
-chrome-devtools-mcp 很強大，但每次 AI 呼叫工具前都要先理解這 50+ 個工具的用途，光是工具描述就吃掉大量 context。對於只想快速 debug JavaScript 錯誤的場景來說，這太浪費了。
+chrome-devtools-mcp 很強大，但工具越多、AI 的認知負擔越大——回應更慢、選錯工具的機率更高。日常除錯需要的是高信噪比，不是瑞士刀。
 
-所以我做了這個「**最小可行 MCP**」：
+所以我做了這個「**最小可行 MCP**」，用 6 個工具覆蓋 ~85% 的除錯場景：
 
 - `list_targets` — 列出瀏覽器分頁
 - `get_console_logs` — 讀取 Console 輸出
+- `get_network_logs` — 監控 HTTP 請求/回應
 - `navigate` — 導航或重新整理
 - `execute_js` — 在頁面執行 JavaScript
+- `take_screenshot` — 截取頁面畫面
 
-就這四個。夠用就好。
-
-這個 MCP 的核心目標，是徹底執行**減法原則**——用最小的功能達成最大的效果。實際上，這也是 **80/20 法則**的運用：80% 的 debug 場景只需要看 Console Log，那為什麼要載入 100% 的工具？
+核心目標是**最佳信噪比**——用最少的工具達成最大的除錯能力。每個工具都因為 `execute_js` 無法替代而存在。
 
 ---
 
@@ -64,9 +64,11 @@ chrome-devtools-mcp 很強大，但每次 AI 呼叫工具前都要先理解這 5
 |------|------|
 | `list_targets` - 列出瀏覽器分頁 | ✅ |
 | `get_console_logs` - 讀取 console 輸出 | ✅ |
+| `get_network_logs` - 監控網路請求 | ✅ |
 | `navigate` - 導航或重新載入頁面 | ✅ |
 | `execute_js` - 在頁面執行 JavaScript | ✅ |
-| `filter` 參數 - 過濾 log 類型 | ✅ |
+| `take_screenshot` - 截取頁面畫面 | ✅ |
+| `filter` 參數 - 過濾 log/network 類型 | ✅ |
 | 自動啟動 debug 模式 Chrome | ✅ |
 | 獨立 user-data-dir (`/tmp/chrome-cdp-9222`) | ✅ |
 | 500 條 log 快取上限 | ✅ |
@@ -183,6 +185,26 @@ Available targets:
 (showing 2 of 50 total logs, filter: all)
 ```
 
+### `get_network_logs`（v1.5.0 新增）
+
+取得指定目標的 HTTP 請求/回應紀錄。首次呼叫會開始監聽。
+
+| 參數 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `targetIndex` | number | 0 | 目標索引（從 list_targets 取得） |
+| `maxLines` | number | 50 | 最大回傳筆數 |
+| `filter` | string | "all" | 過濾類型：all / failed / xhr / fetch / document / stylesheet / script / image |
+| `port` | number | 9222 | Chrome CDP 連接埠 |
+
+```
+=== Network Logs for http://localhost:3000 ===
+[GET] 200 http://localhost:3000/ (120ms, 4.2KB)
+[GET] 200 http://localhost:3000/api/user (85ms, 1.1KB)
+[POST] 500 http://localhost:3000/api/save (230ms)
+[GET] FAILED http://localhost:3000/missing.js (15ms) Error: net::ERR_FILE_NOT_FOUND
+(showing 4 of 4 total, filter: all)
+```
+
 ### `navigate`
 
 導航到指定 URL 或重新整理頁面。
@@ -241,6 +263,21 @@ Result:
 "My Application"
 ```
 
+### `take_screenshot`（v1.5.0 新增）
+
+截取當前頁面的畫面。回傳 PNG 圖片（若太大自動降級為 JPEG）。適合視覺化除錯 layout、CSS 或 UI 狀態。
+
+| 參數 | 類型 | 預設值 | 說明 |
+|------|------|--------|------|
+| `targetIndex` | number | 0 | 目標索引（從 list_targets 取得） |
+| `fullPage` | boolean | false | 截取整頁（true）或僅可視區域（false） |
+| `port` | number | 9222 | Chrome CDP 連接埠 |
+
+**安全措施：**
+- Viewport 限制為 1280×800
+- PNG 超過 500KB 時自動降級為 JPEG
+- 預設 `fullPage: false` 避免超大截圖
+
 ---
 
 ## 系統架構
@@ -253,8 +290,8 @@ graph TB
 
     subgraph MCP["simple-console-mcp"]
         SERVER["MCP Server<br/>StdioTransport"]
-        TOOLS["4 Tools<br/>list_targets | get_console_logs | navigate | execute_js"]
-        CACHE["Log Cache<br/>Map + WeakMap"]
+        TOOLS["6 Tools<br/>list_targets | get_console_logs | get_network_logs<br/>navigate | execute_js | take_screenshot"]
+        CACHE["Cache<br/>Console Logs + Network Requests"]
     end
 
     subgraph Browser["Chrome 瀏覽器"]
@@ -322,7 +359,7 @@ Claude 呼叫 get_console_logs → MCP 回傳累積的 logs → Claude 處理
 ```
 simple-console-mcp/
 ├── src/
-│   └── index.js        # MCP Server 主程式（~550 行，含安全性強化）
+│   └── index.js        # MCP Server 主程式（~700 行，含安全性強化）
 ├── bin/
 │   └── start-chrome.sh # Chrome 啟動腳本
 ├── package.json
@@ -347,12 +384,32 @@ simple-console-mcp/
 
 1. **Chrome 必須開啟 CDP**：沒有 `--remote-debugging-port` 參數的 Chrome 無法連接
 2. **一次只能連一個 Chrome**：如果有多個 Chrome 實例，MCP 會連接到第一個
-3. **Log 快取上限**：每個目標最多保留 500 條 Log，超過會自動清除舊的
-4. **導航會清除 Log**：呼叫 navigate 後，該目標的 Log 會被清空
+3. **快取上限**：每個目標最多保留 500 條 Console Log 和 200 筆 Network 紀錄，超過自動清除舊的
+4. **導航會清除快取**：呼叫 navigate 後，該目標的 Console Log 和 Network 紀錄都會清空
 
 ---
 
 ## 更新日誌
+
+### v1.5.0 (2026-04-15)
+
+**新功能：**
+- ✨ **`get_network_logs` 工具**：監控 HTTP 請求/回應
+  - Pull-based 監聽（與 console logs 相同模式）
+  - 顯示 method、URL、status、duration、size
+  - 過濾：all / failed / xhr / fetch / document / stylesheet / script / image
+  - 每個目標 200 筆快取
+- ✨ **`take_screenshot` 工具**：截取頁面畫面
+  - 透過 MCP image content type 回傳 PNG 圖片
+  - PNG 超過 500KB 時自動降級為 JPEG
+  - Viewport 限制 1280×800，deviceScaleFactor: 1
+  - 可選 `fullPage` 模式
+
+**改善項目：**
+- 🔧 提取 `getTargetPage()` 共用 helper（減少工具間重複程式碼）
+- 🔧 導航時同時清除 Console 和 Network 快取
+- 🔧 Cleanup handler 新增移除 network event listeners
+- 📦 定位從「97% 更輕」調整為「80% 更輕、最佳信噪比」
 
 ### v1.4.0 (2025-12-17)
 
