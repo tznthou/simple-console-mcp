@@ -100,7 +100,16 @@ function validateUrl(url) {
   // 檢查是否為非 localhost 的 HTTP（用於警告）
   const isHttp = /^http:\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1|::1)(:|\/|$)/i.test(url);
 
-  return { url, isHttp };
+  // 檢查是否為私有/內部 IP（SSRF 風險提示，不阻擋因為這是本機除錯工具）
+  let isPrivateIp = false;
+  try {
+    const parsed = new URL(url);
+    isPrivateIp = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(parsed.hostname);
+  } catch {
+    // URL 解析失敗時忽略
+  }
+
+  return { url, isHttp, isPrivateIp };
 }
 
 /**
@@ -110,6 +119,16 @@ function validateUrl(url) {
  */
 function createErrorResponse(message) {
   return { content: [{ type: 'text', text: `Error: ${message}` }] };
+}
+
+/**
+ * 清理外部來源的字串，移除換行符防止 log injection
+ * @param {string} s - 外部來源的字串（page title, console text, error message 等）
+ * @returns {string} 清理後的字串
+ */
+function sanitizeLogString(s) {
+  if (typeof s !== 'string') return String(s);
+  return s.replace(/[\r\n]/g, ' ').substring(0, 500);
 }
 
 function getChromePath() {
@@ -308,7 +327,7 @@ function formatNetworkLogs(store, maxLines, filter) {
     const status = e.error ? 'FAILED' : (e.status || 'PENDING');
     const duration = e.duration !== null ? `${e.duration}ms` : '...';
     const size = e.size ? formatBytes(e.size) : '';
-    return `[${e.method}] ${status} ${e.url} (${duration}${size ? ', ' + size : ''})${e.error ? ' Error: ' + e.error : ''}`;
+    return `[${e.method}] ${status} ${e.url} (${duration}${size ? ', ' + size : ''})${e.error ? ' Error: ' + sanitizeLogString(e.error) : ''}`;
   }).join('\n');
 
   return { text, displayedCount: recent.length, filteredCount, totalCount };
@@ -320,7 +339,7 @@ function formatLogs(logs, maxLines, filter) {
     filtered = logs.filter(log => log.type.toLowerCase() === filter);
   }
   const recent = filtered.slice(-maxLines);
-  const text = recent.map(log => `[${log.time}] ${log.type}: ${log.text}`).join('\n');
+  const text = recent.map(log => `[${log.time}] ${log.type}: ${sanitizeLogString(log.text)}`).join('\n');
 
   return {
     text,
@@ -461,8 +480,9 @@ server.registerTool(
   async ({ url, targetIndex, port }) => {
     try {
       // 驗證 URL 協議，防止 javascript: 和 file:// 注入
-      const { url: validUrl, isHttp } = validateUrl(url);
+      const { url: validUrl, isHttp, isPrivateIp } = validateUrl(url);
       const httpWarning = isHttp ? '\n⚠️  Warning: Using HTTP (not HTTPS). Data may be intercepted.' : '';
+      const privateIpWarning = isPrivateIp ? '\n⚠️  Warning: Navigating to a private/internal IP address.' : '';
 
       const result = await getTargetPage(targetIndex, port, { pageOnly: true });
       if (result.error) return createErrorResponse(result.error);
@@ -483,8 +503,8 @@ server.registerTool(
         return { content: [{ type: 'text', text: `Reloaded: ${newUrl}\n(Console logs cleared)` }] };
       } else {
         await page.goto(validUrl, { waitUntil: PAGE_LOAD_WAIT_UNTIL });
-        const title = await page.title();
-        return { content: [{ type: 'text', text: `Navigated to: ${validUrl}\nPage title: "${title}"\n(Console logs cleared)${httpWarning}` }] };
+        const title = sanitizeLogString(await page.title());
+        return { content: [{ type: 'text', text: `Navigated to: ${validUrl}\nPage title: "${title}"\n(Console logs cleared)${httpWarning}${privateIpWarning}` }] };
       }
     } catch (err) {
       console.error('[navigate] Error:', { port, targetIndex, url, error: err.message });
