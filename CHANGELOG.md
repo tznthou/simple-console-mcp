@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-05-14 — Supply Chain Hardening (No version bump)
+
+**Security & Supply Chain:**
+- Switched npm publish to OIDC trusted publishing — removed `NODE_AUTH_TOKEN` from release workflow, aligned with sibling packages
+- Pinned all third-party GitHub Actions to full commit SHA (`actions/checkout`, `actions/setup-node`)
+- Added `.github/dependabot.yml` (github-actions ecosystem, weekly) so SHA pins stay current via PRs
+- `npm audit fix` — 7 vulnerabilities → 0, all resolved within existing semver ranges (no `package.json` changes)
+  - `@modelcontextprotocol/sdk` 1.24.3 → 1.29.0 (cross-client data leak, ReDoS)
+  - `basic-ftp` 5.0.5 → 5.3.1 (critical: path traversal + CRLF injection)
+  - `fast-uri` 3.1.0 → 3.1.2 (path traversal, host confusion)
+  - Plus `path-to-regexp`, `ajv`, `ip-address`, `qs` (transitive)
+
+**Context:** Post 2026-05-14 Mini Shai-Hulud / TanStack audit. `NPM_TOKEN` was identified as the last long-lived secret in the publish path; OIDC closes that vector.
+
 ## v1.5.0 (2026-04-15)
 
 **New Features:**

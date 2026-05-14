@@ -361,6 +361,21 @@ simple-console-mcp/
 
 ---
 
+## Security
+
+Supply-chain security gets extra weight for an MCP server — it sits between your AI and your browser. This package's defenses:
+
+| Layer | Posture |
+|-------|---------|
+| Publishing | OIDC trusted publishing — no long-lived `NPM_TOKEN` in the release workflow |
+| GitHub Actions | All third-party actions pinned to full commit SHA |
+| Dependencies | `npm audit` clean (last verified 2026-05-14) |
+| Provenance | Every release published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) |
+
+See [CHANGELOG.md](CHANGELOG.md) for the latest hardening pass.
+
+---
+
 ## Changelog
 
 ### v1.5.0 (2026-04-15)

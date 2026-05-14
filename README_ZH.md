@@ -361,6 +361,21 @@ simple-console-mcp/
 
 ---
 
+## 安全性
+
+MCP server 夾在 AI 與你的瀏覽器中間，供應鏈安全比一般套件更值得認真把關。本套件的防禦姿態：
+
+| 層級 | 做法 |
+|------|------|
+| 發佈流程 | OIDC trusted publishing，release workflow 不存在長期有效的 `NPM_TOKEN` |
+| GitHub Actions | 第三方 actions 全部 pin 到 full commit SHA |
+| 依賴套件 | `npm audit` 零漏洞（最近驗證：2026-05-14） |
+| Provenance | 每次發版都帶 [npm provenance](https://docs.npmjs.com/generating-provenance-statements) 簽章 |
+
+最近一次強化記錄請見 [CHANGELOG.md](CHANGELOG.md)。
+
+---
+
 ## 更新日誌
 
 ### v1.5.0 (2026-04-15)
